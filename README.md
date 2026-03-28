@@ -5,9 +5,9 @@
 * `MotoBlackBoxViewer.App` — WPF UI, встроенная карта, окно, ViewModel
   ⚠️ Review note: UI-слой хорошо декомпозирован, но orchestration уже смещается в coordinator и может стать новым узким местом.
 * `MotoBlackBoxViewer.Core` — модели, CSV-парсер, анализ телеметрии
-  ⚠️ Review note: core логика чистая, но CSV-парсер пока рассчитан на “контролируемые” данные.
-* `MotoBlackBoxViewer.Tests` — реальные unit-тесты для парсинга и статистики
-  ⚠️ Review note: покрытие есть, но не охватывает реальные edge-case сценарии.
+  ⚠️ Review note: core логика чистая, но CSV-парсер всё ещё не рассчитан на очень большие или грязные логи.
+* `MotoBlackBoxViewer.Tests` — unit-тесты для parsing, analytics и части app-layer поведения
+  ⚠️ Review note: покрытие уже заметно лучше, но до end-to-end сценариев и performance-paths ещё есть запас.
 
 ---
 
@@ -18,24 +18,40 @@
 ## Что уже есть
 
 * загрузка CSV с разделителем `;`
-  ⚠️ Review note: используется `Split(';')`, нет поддержки quoted CSV и escape-символов
-* поддержка русских заголовков
-* попытка чтения UTF-8, затем CP1251
-  ⚠️ Review note: fallback реализован через broad `catch`, может скрывать реальные ошибки (IO / cancellation)
+  ⚠️ Review note: parser уже поддерживает quoted CSV и `;` внутри значений, но всё ещё silently skip’ает malformed rows.
+* поддержка русских и английских заголовков
+* чтение UTF-8 с fallback на CP1251
+  ⚠️ Review note: fallback теперь основан на decode failure, а не на broad `catch`, но чтение всё ещё идёт целиком в память.
 * таблица точек
 * графики скорости и угла наклона
 * график ускорений `X / Y / Z`
-* встроенная карта маршрута прямо в окне приложения через WebView2
-* подсветка выбранной точки одновременно в таблице, на графиках и на карте
+* встроенная карта маршрута через WebView2
+* связанная подсветка выбранной точки в таблице, на графиках и на карте
 * ползунок воспроизведения маршрута
-* кнопки пошагового перемещения и авто-проигрывания точек
-* выбор **скорости воспроизведения**: `0.25x / 0.5x / 1x / 2x / 4x`
-* **фильтр диапазона точек** с обновлением карты, графиков, таблицы и статистики
-* корректный расчет дистанции **для выбранного диапазона**, а не только для всего файла
-  ⚠️ Review note: расчёт не учитывает выбросы GPS
+* пошаговое перемещение и autoplay точек
+* выбор скорости воспроизведения: `0.25x / 0.5x / 1x / 2x / 4x`
+* фильтр диапазона точек с обновлением карты, графиков, таблицы и статистики
+* корректный расчёт дистанции для выбранного диапазона
+  ⚠️ Review note: расчёт всё ещё не фильтрует GPS outliers.
 * экспорт маршрута в HTML-карту и открытие во внешнем браузере
-  ⚠️ Review note: JSON вставляется напрямую в HTML/JS → потребует escaping при расширении модели
+  ⚠️ Review note: export-path уже использует safe JSON bootstrap, но long-route payload size остаётся отдельным perf-вопросом.
 * сохранение и автоматическое восстановление последней сессии
+  ⚠️ Review note: persistence теперь debounce-based и умеет `Flush(...)`, что снижает лишние записи на диск.
+
+---
+
+## What Improved Recently
+
+* `CsvTelemetryReader` теперь использует strict UTF-8 decode и fallback на CP1251 только при `DecoderFallbackException`.
+* CSV parsing теперь поддерживает quoted поля и embedded separators.
+* range filtering теперь режет contiguous slice через `SlicePoints(...)`, а не сканирует весь лог через линейный `Where(...)`.
+* `SessionPersistenceCoordinator` теперь debounce’ит save, умеет `Flush(...)` и репортит ошибки через trace/error handler.
+* export карты и runtime WebView2 updates используют `MapScriptBuilder` для безопасной передачи route JSON через сериализованную строку и `JSON.parse(...)`.
+* `MapViewControl` уже избегает redundant refresh pushes через cached applied state:
+  * `_appliedRouteJson`
+  * `_appliedRefreshVersion`
+  * `_appliedSelectedPointIndex`
+* live map sync теперь coalesced: параллельные route/selection updates не разрастаются в россыпь независимых fire-and-forget задач.
 
 ---
 
@@ -49,16 +65,16 @@
 * `ускорение по Z`
 * `ускорение по X`
 * `ускорение по Y`
-* `Угол наклона`
+* `угол наклона`
 
-Также поддерживаются alias-имена (`lat`, `lon`, `speed`, и т.д.)
+Также поддерживаются alias-имена (`lat`, `lon`, `speed`, и т.д.).
 
 Регистр не критичен.
 
 ⚠️ Review note:
 
-* все поля фактически обязательны → нет graceful degradation
-* строки с ошибками silently игнорируются
+* все поля фактически обязательны
+* строки с ошибками пока silently игнорируются
 
 TODO:
 
@@ -85,17 +101,19 @@ TODO:
 ## Как работает карта
 
 * WebView2 + HTML-шаблон
-* маршрут передается через JS
+* маршрут передаётся через JS
 * используется OpenStreetMap
 
 ⚠️ Review note:
 
-* используется полный JSON payload → может быть дорогим на длинных маршрутах
-* обновления карты не инкрементальные
+* exported HTML уже использует safe JSON bootstrap
+* runtime WebView2 sync тоже уже не шлёт raw JSON напрямую, но всё ещё требует дальнейшей оптимизации по payload size и long-route responsiveness
+* `MapViewControl` уже кеширует применённое состояние и coalesced async updates, чтобы не слать одинаковые обновления повторно
 
 TODO:
 
-* оптимизация передачи данных (chunking / incremental updates)
+* оптимизация передачи данных для длинных маршрутов
+* incremental updates / chunking при необходимости
 
 ---
 
@@ -137,7 +155,6 @@ TODO:
 ## Архитектурный шаг v11
 
 * введены:
-
   * `TelemetrySessionState`
   * `PlaybackCoordinator`
   * `SessionPersistenceCoordinator`
@@ -151,7 +168,6 @@ TODO:
 ## Архитектурный шаг v12
 
 * разделение на:
-
   * Data
   * Selection
   * Playback
@@ -159,11 +175,11 @@ TODO:
 
 ⚠️ Review note:
 
-* структура теперь хорошо отражает UI-сценарии
+* структура хорошо отражает UI-сценарии
 
-НО:
+Но:
 
-* coordination теперь сосредоточен в `TelemetryWorkspaceCoordinator`
+* coordination сосредоточен в `TelemetryWorkspaceCoordinator`
 * возможен рост сложности в одном месте
 
 ---
@@ -171,20 +187,18 @@ TODO:
 ## Архитектурный шаг v13
 
 * `CsvTelemetryReader` усилен:
-
   * strict UTF-8 decode + fallback на CP1251 только при `DecoderFallbackException`
   * поддержка quoted CSV-полей и `;` внутри значений
 * `TelemetryWorkspaceCoordinator` теперь:
-
   * не проглатывает `OperationCanceledException` при restore/load
   * выставляет явный `StatusText` при ошибках загрузки
-* карта и export переведены на безопасную передачу route JSON:
-
+* карта и export переведены на более безопасную передачу route JSON:
   * добавлен `MapScriptBuilder`
-  * JSON встраивается через сериализованную строку + `JSON.parse(...)`
+  * JSON передаётся через сериализованную строку + `JSON.parse(...)`
 * `AsyncRelayCommand`, startup и map sync получили trace/log-friendly обработку async-ошибок
+* range filtering теперь использует contiguous slice вместо линейного сканирования
+* session persistence теперь debounce-based и умеет `Flush(...)`
 * добавлены unit-тесты на:
-
   * quoted CSV / encoding fallback
   * coordinator failure/cancellation paths
   * map script escaping
@@ -192,22 +206,22 @@ TODO:
 
 ⚠️ Review note:
 
-* устойчивость data/map/async слоёв выросла, но streaming CSV, malformed-row diagnostics и дальнейшее дробление coordinator всё ещё актуальны
+* устойчивость data/map/async слоёв выросла, но async-тема улучшена частично, а не закрыта полностью: дальше всё ещё нужны streaming CSV, malformed-row diagnostics, chart perf work и дальнейшее дробление coordinator
 
 ---
 
 ## Что можно делать дальше
 
-* фильтрация по значениям (speed / lean / accel)
-* экспорт скринов
+* фильтрация по значениям (`speed` / `lean` / `accel`)
+* экспорт скриншотов
 * офлайн-карта
 * мульти-файлы
 
 ➕ Добавить:
 
-* устойчивый CSV-парсер
-* поддержка больших файлов (streaming)
-* оптимизация графиков
+* streaming CSV
+* malformed-row diagnostics
+* оптимизацию графиков
 
 ---
 
@@ -215,50 +229,42 @@ TODO:
 
 Покрывают:
 
-* парсинг CSV
+* parsing CSV
 * кодировки
 * дистанцию
 * статистику
+* coordinator restore/load/reset/clear/playback flows
+* session persistence debounce/flush
+* map script escaping
+* async command reentrancy/error recovery
 
 ⚠️ Review note:
-не покрывают:
 
-* грязные CSV
-* большие файлы
-* async/cancellation
-* экспорт карты
-* производительность
+* всё ещё не покрыты большие файлы, full export content и performance-sensitive paths
 
 TODO:
 
-* добавить edge-case тесты
+* добавить edge-case и large-dataset тесты
 
 ---
 
-## Архитектурные риски (добавлено)
+## Архитектурные риски
 
 ⚠️ Основные слабые места:
 
 * CSV parsing:
-
-  * нет поддержки реального CSV формата
-  * чтение файла целиком в память
-* encoding:
-
-  * ненадёжная стратегия fallback
-* производительность:
-
-  * полная перерисовка графиков
-  * пересборка массивов данных
-* async:
-
-  * fire-and-forget вызовы
+  * файл всё ещё читается целиком в память
+  * malformed rows всё ещё silently skip’аются
 * аналитика:
-
-  * простые средние без учёта времени
+  * средние всё ещё не time-weighted
+  * GPS outlier filtering пока нет
+* производительность:
+  * графики всё ещё делают full redraw
+  * массивы данных всё ещё часто materialize’ятся заново
+* async:
+  * стало безопаснее в части путей, но UI-слой ещё не доведён до полностью прозрачного error surfacing
 * масштабируемость:
-
-  * coordinator может стать bottleneck
+  * `TelemetryWorkspaceCoordinator` всё ещё может стать bottleneck
 
 ---
 
@@ -270,7 +276,7 @@ CI:
 * build
 * test
 
-✔️ Хорошая базовая настройка
+✔️ Базовая настройка уже есть
 
 ---
 
@@ -279,15 +285,15 @@ CI:
 Текущее состояние:
 
 * ✔️ Хорошая архитектурная база
-* ✔️ Чистый Core
-* ✔️ Продуманная декомпозиция UI
+* ✔️ Core стал устойчивее к реальным CSV
+* ✔️ UI orchestration стал заметно безопаснее в нескольких важных точках
 
 Но:
 
-* ⚠️ парсинг данных — главный риск
-* ⚠️ производительность — следующий риск
-* ⚠️ orchestration — потенциальная точка роста сложности
+* ⚠️ parsing больших и грязных данных всё ещё главный риск
+* ⚠️ chart performance — следующий большой риск
+* ⚠️ orchestration всё ещё требует дальнейшего дробления
 
 Главный фокус:
 
-👉 **устойчивость данных + контроль сложности orchestration**
+👉 **устойчивость данных + контроль сложности orchestration + подготовка к большим логам**

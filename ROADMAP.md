@@ -33,9 +33,11 @@ The app already supports:
 * playback controls with multiple speed presets
 * point range filtering
 * route export to HTML map
-  ⚠️ Review note: route payload is now injected through a safer JSON-string
-  bootstrap path, but full payload delivery can still be expensive on long logs.
+  ⚠️ Review note: export and runtime route sync already use a safer JSON-string
+  bridge, but long-route payload cost is still an open performance topic.
 * session restore for last file, filter, speed, and playback position
+  ⚠️ Review note: save is now debounce-based and supports `Flush(...)`, which
+  reduces noisy synchronous writes during normal UI interaction.
 
 ## Architecture Map
 
@@ -54,7 +56,6 @@ domain rules, parsers, calculations, and deterministic tests.
 ⚠️ Review note:
 
 * CSV reader is more resilient now, but it still:
-
   * loads full file into memory
   * silently skips malformed rows
 * `TelemetryAnalyzer` uses simple averages (e.g. speed), which are not
@@ -100,12 +101,13 @@ Supporting services and abstractions already exist for:
 
 * coordination layer is already the main complexity hotspot and may become a
   "god service" if not controlled
-* async error surfacing is safer now around load/restore/map command paths, but
-  orchestration is still centralized and should be split before it grows further
+* async handling is safer now around load/restore/command/map paths, but it is
+  still not a fully solved cross-app concern
 
 TODO:
 
 * consider splitting coordinator into scenario-specific services earlier
+* continue improving explicit async error surfacing in UI-facing flows
 
 ### Tests
 
@@ -131,6 +133,7 @@ Missing coverage for:
 * large files
 * performance-sensitive paths
 * end-to-end map export content
+* richer runtime map sync scenarios
 
 TODO:
 
@@ -150,8 +153,12 @@ The codebase is in a good intermediate state:
   whole log with a linear `Where(...)`
 * `TelemetrySelectionViewModel` and `TelemetryMapViewModel` now release their
   event subscriptions during workspace disposal
+* session persistence now debounce-saves, supports `Flush(...)`, and reports
+  save failures through trace/error callbacks
 * CSV loading now handles quoted values and stricter encoding fallback
-* map export and WebView2 updates now use safer JSON-to-JS bridging
+* map export and runtime WebView2 route sync now use safer JSON-to-JS bridging
+* `MapViewControl` caches applied route/refresh/selection state and coalesces
+  pending map updates to avoid redundant pushes
 * tests cover core parsing, analytics, session persistence, and a growing part
   of the app-layer behavior
 
@@ -195,6 +202,7 @@ These are the places most likely to matter in future work:
 
    * current rendering approach may not scale well with large point counts
    * no decimation/downsampling yet
+   * full redraw + array materialization still happen on each UI update
 
 ## Review Backlog
 
@@ -204,8 +212,8 @@ These review notes still look valid and should stay visible for future work:
   transient flags; it likely wants to be split over time.
 * `TelemetrySeriesSnapshot` removed repeated getter work, but filter changes
   still rebuild all chart arrays and chart definitions each time.
-* the WPF to WebView2 bridge still sends full serialized route payloads into
-  `ExecuteScriptAsync`, which may become expensive for long routes.
+* the WPF to WebView2 bridge is safer now, but still sends full serialized route
+  payloads into `ExecuteScriptAsync`, which may become expensive for long routes.
 * the CSV reader is more robust about quoting and encoding fallback now, but it
   still skips malformed rows and reads the whole file into memory.
 * the core telemetry model is still intentionally narrow and may need to grow
@@ -216,8 +224,8 @@ These review notes still look valid and should stay visible for future work:
 * CSV parsing silently skips malformed rows instead of reporting them
 * analytics currently use simple averages instead of time-aware metrics
 * chart rendering does not yet optimize for large datasets
-* map and startup flows are safer now, but long-running UI scenarios still need
-  broader end-to-end async coverage
+* async flows are safer in some critical paths now, but broader end-to-end UI
+  coverage and clearer surfacing are still needed
 
 ## Recommended Roadmap
 
@@ -260,6 +268,7 @@ Suggested work:
 ➕ Add:
 
 * tests for large datasets and performance-sensitive paths
+* more runtime map sync tests beyond escaping-only checks
 
 Success signal:
 
