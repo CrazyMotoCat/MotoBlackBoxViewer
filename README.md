@@ -59,6 +59,15 @@
   * `_appliedSelectedPointIndex`
 * live map sync теперь coalesced: параллельные route/selection updates не разрастаются в россыпь независимых fire-and-forget задач.
 * базовая визуальная тема уже начала уходить от старого default-WPF вида к более целостной кастомной desktop-палитре.
+* второй UI-pass уже проведён:
+  * graphite-first palette для больших surface-областей
+  * burgundy оставлен как accent
+  * toolbar / playback / range-filter стали плотнее
+  * map overlay cards стали легче и компактнее
+  * contrast states для tabs / combobox / selected grid rows дополнительно выровнены
+* встроенная карта больше не грузится как `file://` page:
+  * `MapViewControl` теперь открывает map HTML через локальный `https` host mapping WebView2
+  * это нужно для совместимости с текущей tile policy OpenStreetMap, где tile requests ожидают корректный `Referer`
 
 ---
 
@@ -137,6 +146,7 @@ TODO:
 * exported HTML уже использует safe JSON bootstrap
 * runtime WebView2 sync тоже уже не шлёт raw JSON напрямую, но всё ещё требует дальнейшей оптимизации по payload size и long-route responsiveness
 * `MapViewControl` уже кеширует применённое состояние и coalesced async updates, чтобы не слать одинаковые обновления повторно
+* embedded map runtime теперь использует local `https` host mapping вместо `file://` navigation, чтобы не упираться в OSM tile blocking из-за missing `Referer`
 
 TODO:
 

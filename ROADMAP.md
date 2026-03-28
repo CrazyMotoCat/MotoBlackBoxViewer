@@ -6,6 +6,10 @@ This document is a compact project brief for future chats and work sessions.
 It captures what the project already does, how it is structured today, and
 which next steps are most valuable.
 
+Working rule:
+
+* all meaningful project changes should also be reflected in `README.md` and `ROADMAP.md`
+
 ## Project Snapshot
 
 * Stack: C# / .NET 10 / WPF
@@ -168,6 +172,9 @@ The codebase is in a good intermediate state:
 * map export and runtime WebView2 route sync now use safer JSON-to-JS bridging
 * `MapViewControl` caches applied route/refresh/selection state and coalesces
   pending map updates to avoid redundant pushes
+* the embedded map now navigates via a local `https` WebView2 host mapping
+  instead of `file://`, which keeps runtime tile loading compatible with the
+  current OpenStreetMap tile policy requiring a valid `Referer`
 * tests cover core parsing, analytics, session persistence, and a growing part
   of the app-layer behavior, including workspace-level guardrails against
   duplicate session persistence during internal synchronization
@@ -205,6 +212,15 @@ Recent review feedback to carry forward:
 * the playback row should read as one cohesive control strip
 * the range filter block should be shorter and more information-dense
 * map overlay cards should become lighter and more typographically refined
+
+Current pass status:
+
+* the second UI pass has been implemented in the current baseline:
+  * graphite-first large surfaces
+  * accent-only burgundy emphasis
+  * denser toolbar / playback / range-filter layout
+  * lighter map cards
+  * improved contrast for tabs, combo boxes, and selected table rows
 
 ## Highest-Value Hotspots
 
@@ -360,11 +376,11 @@ Goal: move from capable prototype to smoother daily-use desktop tool.
 
 Suggested work:
 
-* complete the second-pass visual cleanup:
-  * graphite-first palette
-  * accent-only burgundy usage
-  * denser toolbar and control rows
-  * lighter map cards
+* keep iterating on the new UI baseline rather than reverting it:
+  * preserve graphite-first palette
+  * preserve accent-only burgundy usage
+  * preserve denser toolbar and control rows
+  * preserve lighter map cards
 * explicit settings screen
 * clearer empty/loading/error states
 * better large-file responsiveness
@@ -384,17 +400,15 @@ If continuing development soon, the best order is:
 
 1. Add more app-layer tests around selection, playback, restore, and clear
    flows on top of the new baseline coverage.
-2. Finish the current UI polish pass so the visual baseline is coherent before
-   more user-facing features land.
-3. Refactor `TelemetryWorkspaceCoordinator` into smaller scenario-focused
+2. Refactor `TelemetryWorkspaceCoordinator` into smaller scenario-focused
    pieces if its responsibilities keep growing.
-4. Split `TelemetrySessionState` if new coordination or persistence fields keep
+3. Split `TelemetrySessionState` if new coordination or persistence fields keep
    accumulating.
-5. Only then expand user-facing features like advanced filters or multi-file
+4. Only then expand user-facing features like advanced filters or multi-file
    comparison.
 
 ➕ Add:
-6. Introduce streaming CSV parsing and malformed-row diagnostics before
+5. Introduce streaming CSV parsing and malformed-row diagnostics before
    expanding data sources.
 
 ## Good First Refactors
