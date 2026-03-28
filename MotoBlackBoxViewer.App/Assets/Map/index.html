@@ -148,7 +148,17 @@
     }
 
     function setSelectedIndex(index) {
-      if (!map || index === null || index === undefined) {
+      if (!map) {
+        return;
+      }
+
+      if (index === null || index === undefined) {
+        if (selectedMarker) {
+          map.removeLayer(selectedMarker);
+          selectedMarker = null;
+        }
+
+        setPointCardHtml('<div class="title">Текущая точка</div><div class="muted">Точка еще не выбрана</div>');
         return;
       }
 
@@ -176,6 +186,7 @@
         <div>Координаты: <b>${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}</b></div>
         <div>Скорость: <b>${point.speedKmh.toFixed(1)} км/ч</b></div>
         <div>Угол наклона: <b>${point.leanAngleDeg.toFixed(1)}°</b></div>
+        <div>Ускорения: <b>X ${point.accelX.toFixed(2)}</b> · <b>Y ${point.accelY.toFixed(2)}</b> · <b>Z ${point.accelZ.toFixed(2)}</b></div>
         <div class="muted">Дистанция от старта: ${point.distanceMeters.toFixed(1)} м</div>
       `);
     }

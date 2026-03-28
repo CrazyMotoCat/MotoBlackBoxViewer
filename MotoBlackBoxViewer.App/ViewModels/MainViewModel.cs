@@ -16,6 +16,7 @@ public sealed class MainViewModel : ObservableObject
     private TelemetryPoint? _selectedPoint;
     private TelemetryStatistics _statistics = new();
     private string? _currentFilePath;
+    private int _playbackPosition;
 
     public ObservableCollection<TelemetryPoint> Points { get; } = new();
 
@@ -29,19 +30,17 @@ public sealed class MainViewModel : ObservableObject
         ? "Файл не загружен"
         : Path.GetFileName(_currentFilePath);
 
+    public bool HasPoints => Points.Count > 0;
+
     public TelemetryPoint? SelectedPoint
     {
         get => _selectedPoint;
-        set
-        {
-            if (SetProperty(ref _selectedPoint, value))
-                RaisePropertyChanged(nameof(SelectedPointSummary));
-        }
+        set => SetSelectedPoint(value, syncPlayback: true);
     }
 
     public string SelectedPointSummary => SelectedPoint is null
         ? "Точка не выбрана"
-        : $"#{SelectedPoint.Index} · {SelectedPoint.Latitude:F6}, {SelectedPoint.Longitude:F6} · {SelectedPoint.SpeedKmh:F1} км/ч · наклон {SelectedPoint.LeanAngleDeg:F1}° · дистанция {SelectedPoint.DistanceFromStartMeters:F1} м";
+        : $"#{SelectedPoint.Index} · {SelectedPoint.Latitude:F6}, {SelectedPoint.Longitude:F6} · {SelectedPoint.SpeedKmh:F1} км/ч · наклон {SelectedPoint.LeanAngleDeg:F1}° · AX {SelectedPoint.AccelX:F2} · AY {SelectedPoint.AccelY:F2} · AZ {SelectedPoint.AccelZ:F2}";
 
     public TelemetryStatistics Statistics
     {
@@ -51,6 +50,22 @@ public sealed class MainViewModel : ObservableObject
 
     public IReadOnlyList<double> SpeedSeries => Points.Select(p => p.SpeedKmh).ToArray();
     public IReadOnlyList<double> LeanSeries => Points.Select(p => p.LeanAngleDeg).ToArray();
+    public IReadOnlyList<double> AccelXSeries => Points.Select(p => p.AccelX).ToArray();
+    public IReadOnlyList<double> AccelYSeries => Points.Select(p => p.AccelY).ToArray();
+    public IReadOnlyList<double> AccelZSeries => Points.Select(p => p.AccelZ).ToArray();
+
+    public int PlaybackMinimum => HasPoints ? 1 : 0;
+    public int PlaybackMaximum => Points.Count;
+
+    public int PlaybackPosition
+    {
+        get => _playbackPosition;
+        set => SetPlaybackPosition(value, syncSelectedPoint: true);
+    }
+
+    public string PlaybackSummary => !HasPoints
+        ? "Нет данных"
+        : $"Точка {PlaybackPosition} / {Points.Count}";
 
     public async Task LoadCsvAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -64,27 +79,54 @@ public sealed class MainViewModel : ObservableObject
 
         _currentFilePath = filePath;
         Statistics = _analyzer.Analyze(points);
-        SelectedPoint = Points.FirstOrDefault();
 
+        RaisePropertyChanged(nameof(HasPoints));
         RaisePropertyChanged(nameof(SpeedSeries));
         RaisePropertyChanged(nameof(LeanSeries));
+        RaisePropertyChanged(nameof(AccelXSeries));
+        RaisePropertyChanged(nameof(AccelYSeries));
+        RaisePropertyChanged(nameof(AccelZSeries));
         RaisePropertyChanged(nameof(CurrentFileName));
-        RaisePropertyChanged(nameof(SelectedPointSummary));
+        RaisePropertyChanged(nameof(PlaybackMinimum));
+        RaisePropertyChanged(nameof(PlaybackMaximum));
 
+        SetSelectedPoint(Points.FirstOrDefault(), syncPlayback: true);
         StatusText = $"Загружено точек: {Points.Count}. Файл: {Path.GetFileName(filePath)}";
     }
 
     public void Clear()
     {
         Points.Clear();
-        SelectedPoint = null;
-        Statistics = new TelemetryStatistics();
         _currentFilePath = null;
+        Statistics = new TelemetryStatistics();
+
+        RaisePropertyChanged(nameof(HasPoints));
         RaisePropertyChanged(nameof(SpeedSeries));
         RaisePropertyChanged(nameof(LeanSeries));
+        RaisePropertyChanged(nameof(AccelXSeries));
+        RaisePropertyChanged(nameof(AccelYSeries));
+        RaisePropertyChanged(nameof(AccelZSeries));
         RaisePropertyChanged(nameof(CurrentFileName));
-        RaisePropertyChanged(nameof(SelectedPointSummary));
+        RaisePropertyChanged(nameof(PlaybackMinimum));
+        RaisePropertyChanged(nameof(PlaybackMaximum));
+
+        SetSelectedPoint(null, syncPlayback: true);
         StatusText = "Данные очищены.";
+    }
+
+    public void SelectPointByIndex(int oneBasedIndex)
+        => SetPlaybackPosition(oneBasedIndex, syncSelectedPoint: true);
+
+    public bool MoveSelection(int delta)
+    {
+        if (!HasPoints)
+            return false;
+
+        int target = PlaybackPosition <= 0 ? 1 : PlaybackPosition + delta;
+        int clamped = Math.Clamp(target, 1, PlaybackMaximum);
+        bool changed = clamped != PlaybackPosition;
+        SetPlaybackPosition(clamped, syncSelectedPoint: true);
+        return changed;
     }
 
     public string GetRouteJson() => _mapExportService.BuildRouteJson(Points);
@@ -110,5 +152,38 @@ public sealed class MainViewModel : ObservableObject
     {
         string htmlPath = ExportMapHtml();
         _mapExportService.OpenInBrowser(htmlPath);
+    }
+
+    private void SetSelectedPoint(TelemetryPoint? value, bool syncPlayback)
+    {
+        bool changed = SetProperty(ref _selectedPoint, value, nameof(SelectedPoint));
+
+        if (!changed)
+            return;
+
+        RaisePropertyChanged(nameof(SelectedPointSummary));
+
+        if (syncPlayback)
+        {
+            int targetPosition = value?.Index ?? 0;
+            SetPlaybackPosition(targetPosition, syncSelectedPoint: false);
+        }
+    }
+
+    private void SetPlaybackPosition(int value, bool syncSelectedPoint)
+    {
+        int clamped = !HasPoints ? 0 : Math.Clamp(value, 1, PlaybackMaximum);
+        bool changed = SetProperty(ref _playbackPosition, clamped, nameof(PlaybackPosition));
+
+        if (!changed)
+            return;
+
+        RaisePropertyChanged(nameof(PlaybackSummary));
+
+        if (syncSelectedPoint)
+        {
+            TelemetryPoint? point = clamped == 0 ? null : Points[clamped - 1];
+            SetSelectedPoint(point, syncPlayback: false);
+        }
     }
 }
