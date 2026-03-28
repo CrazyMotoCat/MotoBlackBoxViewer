@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Moto Route Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <style>
+    html, body, #map { height: 100%; margin: 0; }
+    body { background: #0f172a; color: #e5e7eb; font-family: Segoe UI, Arial, sans-serif; }
+    #map { background: #0f172a; }
+    .panel {
+      position: absolute;
+      z-index: 1000;
+      background: rgba(15, 23, 42, 0.88);
+      color: #e5e7eb;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+      backdrop-filter: blur(8px);
+    }
+    #status {
+      top: 12px;
+      left: 12px;
+      padding: 10px 12px;
+      max-width: 340px;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    #pointCard {
+      left: 12px;
+      bottom: 12px;
+      padding: 12px 14px;
+      min-width: 270px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    #pointCard .muted, #status .muted { color: #94a3b8; }
+    #pointCard .title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .leaflet-control-attribution { font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="status" class="panel">Карта готова. Загрузите CSV в приложении.</div>
+  <div id="pointCard" class="panel">
+    <div class="title">Текущая точка</div>
+    <div class="muted">Точка еще не выбрана</div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script>
+    let map;
+    let routeData = [];
+    let routeLine = null;
+    let startMarker = null;
+    let finishMarker = null;
+    let selectedMarker = null;
+
+    const statusEl = document.getElementById('status');
+    const pointCardEl = document.getElementById('pointCard');
+
+    function setStatus(text) {
+      statusEl.innerHTML = text;
+    }
+
+    function setPointCardHtml(html) {
+      pointCardEl.innerHTML = html;
+    }
+
+    function initMap() {
+      if (!window.L) {
+        setStatus('Не удалось загрузить Leaflet/OpenStreetMap. Проверьте подключение к интернету.');
+        return;
+      }
+
+      map = L.map('map', {
+        zoomControl: true,
+        preferCanvas: true
+      }).setView([43.116877, 131.896234], 15);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      if (Array.isArray(routeData) && routeData.length > 0) {
+        setRouteData(routeData);
+      } else {
+        setStatus('Карта готова. Загрузите CSV в приложении.');
+      }
+    }
+
+    function clearMapObjects() {
+      if (!map) return;
+      for (const layer of [routeLine, startMarker, finishMarker, selectedMarker]) {
+        if (layer) map.removeLayer(layer);
+      }
+      routeLine = null;
+      startMarker = null;
+      finishMarker = null;
+      selectedMarker = null;
+    }
+
+    function setRouteData(points) {
+      routeData = Array.isArray(points) ? points : [];
+
+      if (!map) return;
+      clearMapObjects();
+
+      if (!routeData.length) {
+        setStatus('Маршрут пуст. Откройте CSV-файл.');
+        setPointCardHtml('<div class="title">Текущая точка</div><div class="muted">Точка еще не выбрана</div>');
+        return;
+      }
+
+      const latLngs = routeData.map(p => [p.lat, p.lon]);
+      routeLine = L.polyline(latLngs, {
+        color: '#38bdf8',
+        weight: 5,
+        opacity: 0.9
+      }).addTo(map);
+
+      const first = routeData[0];
+      const last = routeData[routeData.length - 1];
+
+      startMarker = L.circleMarker([first.lat, first.lon], {
+        radius: 7,
+        color: '#22c55e',
+        weight: 2,
+        fillColor: '#22c55e',
+        fillOpacity: 0.9
+      }).addTo(map).bindTooltip('Старт');
+
+      finishMarker = L.circleMarker([last.lat, last.lon], {
+        radius: 7,
+        color: '#ef4444',
+        weight: 2,
+        fillColor: '#ef4444',
+        fillOpacity: 0.9
+      }).addTo(map).bindTooltip('Финиш');
+
+      map.fitBounds(routeLine.getBounds(), { padding: [28, 28] });
+      setStatus(`Маршрут загружен: <b>${routeData.length}</b> точек. Выберите строку справа, чтобы подсветить точку.`);
+      setSelectedIndex(first.index);
+    }
+
+    function setSelectedIndex(index) {
+      if (!map || index === null || index === undefined) {
+        return;
+      }
+
+      const point = routeData.find(p => Number(p.index) === Number(index));
+      if (!point) {
+        return;
+      }
+
+      if (selectedMarker) {
+        map.removeLayer(selectedMarker);
+      }
+
+      selectedMarker = L.circleMarker([point.lat, point.lon], {
+        radius: 9,
+        color: '#f97316',
+        weight: 3,
+        fillColor: '#fb923c',
+        fillOpacity: 0.9
+      }).addTo(map);
+
+      map.panTo([point.lat, point.lon], { animate: true, duration: 0.35 });
+
+      setPointCardHtml(`
+        <div class="title">Точка #${point.index}</div>
+        <div>Координаты: <b>${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}</b></div>
+        <div>Скорость: <b>${point.speedKmh.toFixed(1)} км/ч</b></div>
+        <div>Угол наклона: <b>${point.leanAngleDeg.toFixed(1)}°</b></div>
+        <div class="muted">Дистанция от старта: ${point.distanceMeters.toFixed(1)} м</div>
+      `);
+    }
+
+    function clearRouteData() {
+      routeData = [];
+      clearMapObjects();
+      setStatus('Маршрут очищен. Загрузите CSV в приложении.');
+      setPointCardHtml('<div class="title">Текущая точка</div><div class="muted">Точка еще не выбрана</div>');
+    }
+
+    window.setRouteData = setRouteData;
+    window.setSelectedIndex = setSelectedIndex;
+    window.clearRouteData = clearRouteData;
+
+    /*__ROUTE_BOOTSTRAP__*/
+    window.addEventListener('load', initMap);
+  </script>
+</body>
+</html>
