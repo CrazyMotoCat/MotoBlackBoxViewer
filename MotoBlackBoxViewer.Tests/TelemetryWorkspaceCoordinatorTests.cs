@@ -55,6 +55,24 @@ public sealed class TelemetryWorkspaceCoordinatorTests
     }
 
     [Fact]
+    public async Task InitializeAsync_WhenSessionFileIsMissing_SetsStatusAndDoesNotPersist()
+    {
+        string missingPath = Path.Combine(Path.GetTempPath(), $"motobbv_missing_{Guid.NewGuid():N}.csv");
+        var session = new AppSessionSettings
+        {
+            LastFilePath = missingPath
+        };
+
+        using TestContext context = CreateContext(session);
+
+        await context.Coordinator.InitializeAsync();
+
+        Assert.Contains("не найден", context.Data.StatusText, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(context.SessionPersistenceCoordinator.SaveCalls);
+        Assert.False(context.Data.HasSourceData);
+    }
+
+    [Fact]
     public async Task ResetFilter_RestoresFullRangeAndStopsPlayback()
     {
         using TestContext context = CreateContext(new AppSessionSettings());
@@ -74,6 +92,22 @@ public sealed class TelemetryWorkspaceCoordinatorTests
     }
 
     [Fact]
+    public async Task ResetFilter_PersistsOnceWithoutSelectedPosition()
+    {
+        using TestContext context = CreateContext(new AppSessionSettings());
+        await context.Coordinator.LoadCsvAsync("ride.csv");
+        context.SessionPersistenceCoordinator.SaveCalls.Clear();
+        context.Data.FilterStartIndex = 2;
+        context.Coordinator.HandleDataPropertyChanged(nameof(TelemetryDataViewModel.FilterStartIndex));
+        context.SessionPersistenceCoordinator.SaveCalls.Clear();
+
+        context.Coordinator.ResetFilter();
+
+        Assert.Single(context.SessionPersistenceCoordinator.SaveCalls);
+        Assert.False(context.SessionPersistenceCoordinator.SaveCalls[0].IncludeSelectedPosition);
+    }
+
+    [Fact]
     public async Task Clear_ClearsAllDataRefreshesMapAndPersists()
     {
         using TestContext context = CreateContext(new AppSessionSettings());
@@ -87,6 +121,24 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         Assert.Equal(0, context.Selection.PlaybackPosition);
         Assert.Equal("Сессия очищена.", context.Data.StatusText);
         Assert.Equal(2, context.SessionPersistenceCoordinator.SaveCalls.Count);
+    }
+
+    [Fact]
+    public async Task Clear_StopsPlaybackAndPersistsWithoutSelectedPosition()
+    {
+        using TestContext context = CreateContext(new AppSessionSettings());
+        await context.Coordinator.LoadCsvAsync("ride.csv");
+        context.Selection.PlaybackPosition = 2;
+        context.Coordinator.HandleSelectionPropertyChanged(nameof(TelemetrySelectionViewModel.PlaybackPosition));
+        context.Coordinator.TogglePlayback();
+        context.SessionPersistenceCoordinator.SaveCalls.Clear();
+
+        context.Coordinator.Clear();
+
+        Assert.False(context.Playback.IsPlaybackRunning);
+        Assert.Single(context.SessionPersistenceCoordinator.SaveCalls);
+        Assert.False(context.SessionPersistenceCoordinator.SaveCalls[0].IncludeSelectedPosition);
+        Assert.Equal(0, context.SessionPersistenceCoordinator.SaveCalls[0].PlaybackPosition);
     }
 
     [Fact]
@@ -105,6 +157,20 @@ public sealed class TelemetryWorkspaceCoordinatorTests
     }
 
     [Fact]
+    public async Task TogglePlayback_WhenSelectionIsAtEnd_RestartsFromFirstPoint()
+    {
+        using TestContext context = CreateContext(new AppSessionSettings());
+        await context.Coordinator.LoadCsvAsync("ride.csv");
+        context.Selection.PlaybackPosition = context.Selection.PlaybackMaximum;
+
+        context.Coordinator.TogglePlayback();
+
+        Assert.True(context.Playback.IsPlaybackRunning);
+        Assert.Equal(1, context.Selection.PlaybackPosition);
+        Assert.Equal(1, context.Selection.SelectedPoint?.Index);
+    }
+
+    [Fact]
     public async Task HandlePlaybackPropertyChanged_PersistsSpeedAndUpdatesStatusWhileRunning()
     {
         using TestContext context = CreateContext(new AppSessionSettings());
@@ -118,6 +184,21 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         Assert.Equal("2x", context.Playback.SelectedPlaybackSpeed.Label);
         Assert.Equal(2, context.SessionPersistenceCoordinator.SaveCalls.Count);
         Assert.Contains("Скорость воспроизведения", context.Data.StatusText);
+    }
+
+    [Fact]
+    public async Task HandleSelectionPropertyChanged_PersistsSelectedPlaybackPosition()
+    {
+        using TestContext context = CreateContext(new AppSessionSettings());
+        await context.Coordinator.LoadCsvAsync("ride.csv");
+        context.SessionPersistenceCoordinator.SaveCalls.Clear();
+        context.Selection.PlaybackPosition = 2;
+
+        context.Coordinator.HandleSelectionPropertyChanged(nameof(TelemetrySelectionViewModel.PlaybackPosition));
+
+        Assert.Single(context.SessionPersistenceCoordinator.SaveCalls);
+        Assert.True(context.SessionPersistenceCoordinator.SaveCalls[0].IncludeSelectedPosition);
+        Assert.Equal(2, context.SessionPersistenceCoordinator.SaveCalls[0].PlaybackPosition);
     }
 
     [Fact]
