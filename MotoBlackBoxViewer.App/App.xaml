@@ -7,6 +7,7 @@
         <SolidColorBrush x:Key="SurfaceAltBrush" Color="#FF10161C" />
         <SolidColorBrush x:Key="SurfaceSubtleBrush" Color="#FF171E26" />
         <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#FF1C242D" />
+        <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#FF1A222B" />
         <SolidColorBrush x:Key="AccentBrush" Color="#FF8E3345" />
         <SolidColorBrush x:Key="AccentHoverBrush" Color="#FFA64057" />
         <SolidColorBrush x:Key="AccentPressedBrush" Color="#FF702837" />
@@ -16,6 +17,7 @@
         <SolidColorBrush x:Key="BorderSoftBrush" Color="#FF333D48" />
         <SolidColorBrush x:Key="TextBrushTheme" Color="#FFF3F5F7" />
         <SolidColorBrush x:Key="MutedTextBrush" Color="#FF96A1AE" />
+        <SolidColorBrush x:Key="MutedTextSoftBrush" Color="#FF768290" />
         <SolidColorBrush x:Key="SelectedSurfaceBrush" Color="#FF2A3440" />
         <SolidColorBrush x:Key="SelectedBorderBrush" Color="#FFB45768" />
         <SolidColorBrush x:Key="SelectedTextBrush" Color="#FFFDF7F8" />
@@ -116,15 +118,16 @@
         </Style>
 
         <Style x:Key="OverlayCardStyle" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource SurfaceSubtleBrush}" />
-            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTheme}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderSoftBrush}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="10" />
-            <Setter Property="Padding" Value="10" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Padding" Value="12,10" />
         </Style>
 
         <Style x:Key="ChartCardStyle" TargetType="Border" BasedOn="{StaticResource OverlayCardStyle}">
             <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}" />
             <Setter Property="Padding" Value="10" />
         </Style>
 
@@ -339,13 +342,41 @@
             <Setter Property="Foreground" Value="{StaticResource TextBrushTheme}" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTheme}" />
             <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabControl">
+                        <Grid KeyboardNavigation.TabNavigation="Local">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+
+                            <TabPanel Grid.Row="0"
+                                      Margin="0,0,0,-1"
+                                      Background="Transparent"
+                                      IsItemsHost="True" />
+
+                            <Border Grid.Row="1"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="0,12,12,12"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter x:Name="PART_SelectedContentHost"
+                                                  Margin="0"
+                                                  ContentSource="SelectedContent" />
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style TargetType="TabItem">
             <Setter Property="Foreground" Value="{StaticResource TextBrushTheme}" />
             <Setter Property="Background" Value="{StaticResource SurfaceSubtleBrush}" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTheme}" />
-            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="Padding" Value="14,8" />
             <Setter Property="Margin" Value="0,0,6,0" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -370,8 +401,9 @@
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter Property="Foreground" Value="{StaticResource SelectedTextBrush}" />
-                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource SelectedSurfaceBrush}" />
-                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource SelectedBorderBrush}" />
+                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource BorderSoftBrush}" />
+                                <Setter TargetName="TabBorder" Property="BorderThickness" Value="1,1,1,0" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="TabBorder" Property="Opacity" Value="0.55" />
@@ -388,8 +420,8 @@
             <Setter Property="Background" Value="{StaticResource SurfaceAltBrush}" />
             <Setter Property="Foreground" Value="{StaticResource TextBrushTheme}" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrushTheme}" />
-            <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource BorderSoftBrush}" />
-            <Setter Property="VerticalGridLinesBrush" Value="{StaticResource BorderSoftBrush}" />
+            <Setter Property="HorizontalGridLinesBrush" Value="#25313C46" />
+            <Setter Property="VerticalGridLinesBrush" Value="Transparent" />
         </Style>
 
         <Style TargetType="DataGridColumnHeader">
@@ -408,13 +440,35 @@
             <Setter Property="BorderThickness" Value="0" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#FF1E2832" />
+                    <Setter Property="Background" Value="#FF19222B" />
                 </Trigger>
                 <Trigger Property="IsSelected" Value="True">
                     <Setter Property="Background" Value="{StaticResource SelectedSurfaceBrush}" />
                     <Setter Property="Foreground" Value="{StaticResource SelectedTextBrush}" />
                 </Trigger>
             </Style.Triggers>
+        </Style>
+
+        <Style TargetType="DataGridRowHeader">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Opacity" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="DataGridRowHeader">
+                        <Border x:Name="HeaderBorder"
+                                Width="{TemplateBinding Width}"
+                                Background="Transparent"
+                                CornerRadius="3,0,0,3" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsRowSelected" Value="True">
+                                <Setter TargetName="HeaderBorder" Property="Background" Value="{StaticResource SelectedBorderBrush}" />
+                                <Setter Property="Opacity" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style TargetType="DataGridCell">

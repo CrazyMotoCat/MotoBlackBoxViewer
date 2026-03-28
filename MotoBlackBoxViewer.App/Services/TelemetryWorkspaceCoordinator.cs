@@ -43,7 +43,7 @@ internal sealed class TelemetryWorkspaceCoordinator
 
         if (!File.Exists(session.LastFilePath))
         {
-            _data.StatusText = $"Last session file was not found: {session.LastFilePath}";
+            _data.StatusText = $"Не удалось восстановить прошлую сессию: файл {Path.GetFileName(session.LastFilePath)} не найден.";
             return;
         }
 
@@ -68,7 +68,7 @@ internal sealed class TelemetryWorkspaceCoordinator
             }
 
             _map.RequestRefresh();
-            _data.StatusText = $"Restored last session: {Path.GetFileName(session.LastFilePath)}";
+            _data.StatusText = $"Сессия восстановлена: {Path.GetFileName(session.LastFilePath)}.";
         }
         catch (OperationCanceledException)
         {
@@ -76,7 +76,7 @@ internal sealed class TelemetryWorkspaceCoordinator
         }
         catch (Exception ex)
         {
-            _data.StatusText = $"Failed to restore last session: {ex.Message}";
+            _data.StatusText = $"Не удалось восстановить прошлую сессию: {ex.Message}";
         }
         finally
         {
@@ -88,7 +88,7 @@ internal sealed class TelemetryWorkspaceCoordinator
 
     public async Task LoadCsvAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        _data.StatusText = "Loading CSV...";
+        _data.StatusText = "Открываем CSV...";
 
         using IDisposable _ = EnterSuppression();
 
@@ -100,17 +100,17 @@ internal sealed class TelemetryWorkspaceCoordinator
             _selection.SynchronizeWithVisiblePoints(preferredPoint);
             _map.RequestRefresh();
 
-            _data.StatusText = $"Loaded points: {_data.FilterMaximum}. Visible: {_data.Points.Count}. File: {Path.GetFileName(filePath)}";
+            _data.StatusText = $"Файл {Path.GetFileName(filePath)} открыт: {_data.FilterMaximum} точек, в текущем диапазоне {_data.Points.Count}.";
             PersistSession(includeSelectedPosition: false);
         }
         catch (OperationCanceledException)
         {
-            _data.StatusText = "CSV loading was canceled.";
+            _data.StatusText = "Загрузка CSV отменена.";
             throw;
         }
         catch (Exception ex)
         {
-            _data.StatusText = $"CSV load failed: {ex.Message}";
+            _data.StatusText = $"Не удалось открыть CSV: {ex.Message}";
             throw;
         }
     }
@@ -123,7 +123,7 @@ internal sealed class TelemetryWorkspaceCoordinator
         _data.Clear();
         _selection.Clear();
         _map.RequestRefresh();
-        _data.StatusText = "Data cleared.";
+        _data.StatusText = "Сессия очищена.";
         PersistSession(includeSelectedPosition: false);
     }
 
@@ -144,7 +144,7 @@ internal sealed class TelemetryWorkspaceCoordinator
     {
         string htmlPath = _map.ExportMapHtml();
         _map.OpenInBrowser(htmlPath);
-        _data.StatusText = $"Map exported: {htmlPath}";
+        _data.StatusText = $"Карта открыта в браузере: {Path.GetFileName(htmlPath)}.";
     }
 
     public void TogglePlayback()
@@ -159,14 +159,14 @@ internal sealed class TelemetryWorkspaceCoordinator
         }
 
         if (_playback.Start())
-            _data.StatusText = $"Playback started ({_playback.SelectedPlaybackSpeed.Label}).";
+            _data.StatusText = $"Воспроизведение запущено · {_playback.SelectedPlaybackSpeed.Label}.";
     }
 
     public void StopPlayback(bool updateStatus = true)
     {
         bool stopped = _playback.Stop();
         if (updateStatus && stopped)
-            _data.StatusText = "Playback stopped.";
+            _data.StatusText = "Воспроизведение остановлено.";
     }
 
     public void HandleDataPropertyChanged(string? propertyName)
@@ -204,7 +204,7 @@ internal sealed class TelemetryWorkspaceCoordinator
         PersistSession(includeSelectedPosition: false);
 
         if (_playback.IsPlaybackRunning)
-            _data.StatusText = $"Playback speed changed: {_playback.SelectedPlaybackSpeed.Label}.";
+            _data.StatusText = $"Скорость воспроизведения: {_playback.SelectedPlaybackSpeed.Label}.";
     }
 
     private void ApplyFilterAndSynchronize(bool updateStatus)

@@ -260,6 +260,14 @@ Current pass status:
   * denser toolbar / playback / range-filter layout
   * lighter map cards
   * improved contrast for tabs, combo boxes, and selected table rows
+* a follow-up UI review pass is now also part of the baseline:
+  * selected-state accent is more unified across grid, charts, playback, and selected-point readouts
+  * points table is calmer, with right-aligned numeric data and a left accent rail on the selected row
+  * the selected-point card now has clearer hierarchy
+  * playback strip now treats the slider as the main visual anchor
+  * chart tabs now use explicit info rows above plots
+  * statistics tab now fills the lower area with selected-point/session context
+  * session summary and status bar copy are lighter and more product-like
 
 ## Highest-Value Hotspots
 

@@ -188,7 +188,7 @@ public sealed class TelemetryDataViewModel : ObservableObject
         RaisePropertyChanged(nameof(FilterSummary));
 
         if (updateStatus)
-            StatusText = $"Применен диапазон #{FilterStartIndex}–#{FilterEndIndex}. Показано {Points.Count} точек.";
+            StatusText = $"Показан диапазон #{FilterStartIndex}–#{FilterEndIndex} · {Points.Count} точек.";
 
         return ResolvePreferredPoint(preferredPoint);
     }

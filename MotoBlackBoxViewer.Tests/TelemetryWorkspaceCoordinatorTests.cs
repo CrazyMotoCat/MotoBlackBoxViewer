@@ -70,7 +70,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         Assert.Equal(3, context.Data.FilterEndIndex);
         Assert.Equal([1, 2, 3], context.Data.Points.Select(p => p.Index));
         Assert.False(context.Playback.IsPlaybackRunning);
-        Assert.Contains("Применен диапазон", context.Data.StatusText);
+        Assert.Contains("Показан диапазон", context.Data.StatusText);
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         Assert.False(context.Data.HasSourceData);
         Assert.Equal(2, context.Map.RefreshVersion);
         Assert.Equal(0, context.Selection.PlaybackPosition);
-        Assert.Equal("Data cleared.", context.Data.StatusText);
+        Assert.Equal("Сессия очищена.", context.Data.StatusText);
         Assert.Equal(2, context.SessionPersistenceCoordinator.SaveCalls.Count);
     }
 
@@ -97,11 +97,11 @@ public sealed class TelemetryWorkspaceCoordinatorTests
 
         context.Coordinator.TogglePlayback();
         Assert.True(context.Playback.IsPlaybackRunning);
-        Assert.Contains("Playback started", context.Data.StatusText);
+        Assert.Contains("Воспроизведение запущено", context.Data.StatusText);
 
         context.Coordinator.TogglePlayback();
         Assert.False(context.Playback.IsPlaybackRunning);
-        Assert.Equal("Playback stopped.", context.Data.StatusText);
+        Assert.Equal("Воспроизведение остановлено.", context.Data.StatusText);
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
 
         Assert.Equal("2x", context.Playback.SelectedPlaybackSpeed.Label);
         Assert.Equal(2, context.SessionPersistenceCoordinator.SaveCalls.Count);
-        Assert.Contains("Playback speed changed", context.Data.StatusText);
+        Assert.Contains("Скорость воспроизведения", context.Data.StatusText);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => context.Coordinator.LoadCsvAsync("broken.csv"));
 
         Assert.Equal("broken csv", ex.Message);
-        Assert.Equal("CSV load failed: broken csv", context.Data.StatusText);
+        Assert.Equal("Не удалось открыть CSV: broken csv", context.Data.StatusText);
         Assert.Empty(context.SessionPersistenceCoordinator.SaveCalls);
     }
 

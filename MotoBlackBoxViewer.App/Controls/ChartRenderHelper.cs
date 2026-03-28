@@ -160,7 +160,7 @@ internal static class ChartRenderHelper
             CreateBrush("#728091"),
             CreateBrush(lineColorHex),
             CreateBrush("#D9E0E7"),
-            CreateBrush("#D08A98"));
+            CreateBrush("#B45768"));
 
     private static SolidColorBrush CreateBrush(string colorHex)
         => new((Color)ColorConverter.ConvertFromString(colorHex));

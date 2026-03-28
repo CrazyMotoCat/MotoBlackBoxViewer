@@ -65,6 +65,13 @@
   * toolbar / playback / range-filter стали плотнее
   * map overlay cards стали легче и компактнее
   * contrast states для tabs / combobox / selected grid rows дополнительно выровнены
+* следующий UI cleanup pass уже тоже частично внедрён:
+  * selected accent выровнен между grid / charts / playback readouts / point card
+  * points table получила более спокойные линии, numeric alignment и left accent rail для selected row
+  * selected-point card на карте получила более явную иерархию: id, speed/lean, затем coordinates / distance / detail
+  * playback strip сильнее центрирован вокруг slider, а speed/meta стали вторичнее
+  * chart tabs получили info-rows над графиками, а statistics tab теперь заполнен не только верхним metric grid
+  * session summary / status bar стали более product-like: filename сильнее, metadata слабее, статусы менее debug-oriented
 * встроенная карта больше не грузится как `file://` page:
   * `MapViewControl` теперь открывает map HTML через локальный `https` host mapping WebView2
   * это нужно для совместимости с текущей tile policy OpenStreetMap, где tile requests ожидают корректный `Referer`
