@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using MotoBlackBoxViewer.App.Helpers;
 using MotoBlackBoxViewer.App.Models;
+using MotoBlackBoxViewer.App.Services;
 using MotoBlackBoxViewer.Core.Interfaces;
 using MotoBlackBoxViewer.Core.Models;
 
@@ -9,22 +10,24 @@ namespace MotoBlackBoxViewer.App.ViewModels;
 public sealed class TelemetryDataViewModel : ObservableObject
 {
     private readonly ICsvTelemetryReader _reader;
-    private readonly ITelemetryAnalyzer _analyzer;
+    private readonly TelemetryDataProcessor _dataProcessor;
     private readonly TelemetrySessionState _state;
+    private IReadOnlyDictionary<int, int> _visiblePositionsByPointIndex = new Dictionary<int, int>();
     private TelemetrySeriesSnapshot _seriesSnapshot = TelemetrySeriesSnapshot.Empty;
     private int _visibleDataVersion;
 
     public TelemetryDataViewModel(
         ICsvTelemetryReader reader,
-        ITelemetryAnalyzer analyzer,
+        TelemetryDataProcessor dataProcessor,
         TelemetrySessionState state)
     {
         _reader = reader;
-        _analyzer = analyzer;
+        _dataProcessor = dataProcessor;
         _state = state;
+        Points = new ReadOnlyObservableCollection<TelemetryPoint>(_state.VisiblePoints);
     }
 
-    public ObservableCollection<TelemetryPoint> Points => _state.VisiblePoints;
+    public ReadOnlyObservableCollection<TelemetryPoint> Points { get; }
 
     public string StatusText
     {
@@ -106,11 +109,10 @@ public sealed class TelemetryDataViewModel : ObservableObject
     {
         _state.AllPoints.Clear();
         _state.VisiblePoints.Clear();
+        ApplyVisibleData(TelemetryVisibleData.Empty);
         _state.CurrentFilePath = null;
         _state.FilterStartIndex = 0;
         _state.FilterEndIndex = 0;
-        _seriesSnapshot = TelemetrySeriesSnapshot.Empty;
-        Statistics = new TelemetryStatistics();
         RaiseSourceDataProperties();
         RaiseVisibleDataProperties();
     }
@@ -145,12 +147,10 @@ public sealed class TelemetryDataViewModel : ObservableObject
 
     public TelemetryPoint? ApplyCurrentFilter(TelemetryPoint? preferredPoint, bool updateStatus)
     {
-        _state.VisiblePoints.Clear();
-
         if (!HasSourceData)
         {
-            _seriesSnapshot = TelemetrySeriesSnapshot.Empty;
-            Statistics = new TelemetryStatistics();
+            _state.VisiblePoints.Clear();
+            ApplyVisibleData(TelemetryVisibleData.Empty);
             RaiseVisibleDataProperties();
             return null;
         }
@@ -170,15 +170,9 @@ public sealed class TelemetryDataViewModel : ObservableObject
             RaisePropertyChanged(nameof(FilterEndIndex));
         }
 
-        List<TelemetryPoint> filtered = _state.AllPoints
-            .Where(p => p.Index >= start && p.Index <= end)
-            .ToList();
-
-        foreach (TelemetryPoint point in filtered)
-            _state.VisiblePoints.Add(point);
-
-        _seriesSnapshot = TelemetrySeriesSnapshot.Create(filtered);
-        Statistics = _analyzer.Analyze(filtered);
+        TelemetryVisibleData visibleData = _dataProcessor.CreateVisibleData(_state.AllPoints, start, end);
+        _state.VisiblePoints.ReplaceAll(visibleData.Points);
+        ApplyVisibleData(visibleData);
         RaiseVisibleDataProperties();
         RaisePropertyChanged(nameof(FilterSummary));
 
@@ -186,6 +180,23 @@ public sealed class TelemetryDataViewModel : ObservableObject
             StatusText = $"Применен диапазон #{FilterStartIndex}–#{FilterEndIndex}. Показано {Points.Count} точек.";
 
         return ResolvePreferredPoint(preferredPoint);
+    }
+
+    public int GetVisiblePositionOf(TelemetryPoint? point)
+    {
+        if (point is null)
+            return 0;
+
+        return _visiblePositionsByPointIndex.TryGetValue(point.Index, out int position)
+            ? position
+            : 0;
+    }
+
+    private void ApplyVisibleData(TelemetryVisibleData visibleData)
+    {
+        _visiblePositionsByPointIndex = visibleData.VisiblePositionsByPointIndex;
+        _seriesSnapshot = visibleData.SeriesSnapshot;
+        Statistics = visibleData.Statistics;
     }
 
     private void SetFilterStartIndex(int value)

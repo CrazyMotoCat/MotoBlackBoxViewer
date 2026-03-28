@@ -16,35 +16,33 @@ public sealed class MainViewModel : IDisposable
         _fileDialogService = fileDialogService;
 
         OpenCsvCommand = new AsyncRelayCommand(OpenCsvFromDialogAsync);
-        RefreshMapCommand = new RelayCommand(() => Workspace.RequestMapRefresh(), () => Workspace.HasPoints);
-        OpenMapCommand = new RelayCommand(() => Workspace.OpenMapInBrowser(), () => Workspace.HasPoints);
-        ClearCommand = new RelayCommand(() => Workspace.Clear());
-        ResetFilterCommand = new RelayCommand(() => Workspace.ResetFilter(), () => Workspace.HasSourceData);
-        PrevPointCommand = new RelayCommand(() =>
-        {
-            Workspace.StopPlayback(updateStatus: false);
-            Workspace.MoveSelection(-1);
-        }, () => Workspace.HasPoints);
-        NextPointCommand = new RelayCommand(() =>
-        {
-            Workspace.StopPlayback(updateStatus: false);
-            Workspace.MoveSelection(1);
-        }, () => Workspace.HasPoints);
-        TogglePlaybackCommand = new RelayCommand(() => Workspace.TogglePlayback(), () => Workspace.HasPoints);
+        RefreshMapCommand = new RelayCommand(Workspace.RequestMapRefresh, () => Workspace.HasPoints);
+        OpenMapCommand = new RelayCommand(Workspace.OpenMapInBrowser, () => Workspace.HasPoints);
+        ClearCommand = new RelayCommand(Workspace.Clear);
+        ResetFilterCommand = new RelayCommand(Workspace.ResetFilter, () => Workspace.HasSourceData);
+        PrevPointCommand = new RelayCommand(() => MoveSelection(-1), () => Workspace.HasPoints);
+        NextPointCommand = new RelayCommand(() => MoveSelection(1), () => Workspace.HasPoints);
+        TogglePlaybackCommand = new RelayCommand(Workspace.TogglePlayback, () => Workspace.HasPoints);
 
         Workspace.PropertyChanged += Workspace_PropertyChanged;
-        Workspace.Data.PropertyChanged += WorkspaceData_PropertyChanged;
     }
 
     public TelemetryWorkspace Workspace { get; }
 
     public ICommand OpenCsvCommand { get; }
+
     public ICommand RefreshMapCommand { get; }
+
     public ICommand OpenMapCommand { get; }
+
     public ICommand ClearCommand { get; }
+
     public ICommand ResetFilterCommand { get; }
+
     public ICommand PrevPointCommand { get; }
+
     public ICommand NextPointCommand { get; }
+
     public ICommand TogglePlaybackCommand { get; }
 
     public Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -63,7 +61,6 @@ public sealed class MainViewModel : IDisposable
         {
             Workspace.StopPlayback(updateStatus: false);
             await Workspace.LoadCsvAsync(filePath);
-            Workspace.RequestMapRefresh();
         }
         catch (Exception ex)
         {
@@ -71,19 +68,16 @@ public sealed class MainViewModel : IDisposable
         }
     }
 
+    private void MoveSelection(int delta)
+    {
+        Workspace.StopPlayback(updateStatus: false);
+        Workspace.MoveSelection(delta);
+    }
+
     private void Workspace_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(TelemetryWorkspace.HasPoints) or nameof(TelemetryWorkspace.HasSourceData))
             RaiseCommandCanExecuteChanged();
-    }
-
-    private void WorkspaceData_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(TelemetryWorkspace.HasPoints) or nameof(TelemetryWorkspace.HasSourceData)
-            or nameof(TelemetryDataViewModel.HasPoints) or nameof(TelemetryDataViewModel.HasSourceData))
-        {
-            RaiseCommandCanExecuteChanged();
-        }
     }
 
     private void RaiseCommandCanExecuteChanged()
@@ -103,7 +97,6 @@ public sealed class MainViewModel : IDisposable
 
         _isDisposed = true;
         Workspace.PropertyChanged -= Workspace_PropertyChanged;
-        Workspace.Data.PropertyChanged -= WorkspaceData_PropertyChanged;
         Workspace.Dispose();
     }
 }

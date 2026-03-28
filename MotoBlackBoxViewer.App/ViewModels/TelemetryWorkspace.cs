@@ -15,12 +15,12 @@ public sealed class TelemetryWorkspace : ObservableObject, IDisposable
 
     public TelemetryWorkspace(
         ICsvTelemetryReader reader,
-        ITelemetryAnalyzer analyzer,
+        TelemetryDataProcessor dataProcessor,
         IMapExportService mapExportService,
         IPlaybackCoordinator playbackCoordinator,
         ISessionPersistenceCoordinator sessionPersistenceCoordinator)
     {
-        Data = new TelemetryDataViewModel(reader, analyzer, _state);
+        Data = new TelemetryDataViewModel(reader, dataProcessor, _state);
         Selection = new TelemetrySelectionViewModel(Data, _state);
         Playback = new TelemetryPlaybackViewModel(Data, Selection, playbackCoordinator);
         Map = new TelemetryMapViewModel(Data, Selection, mapExportService, _state);

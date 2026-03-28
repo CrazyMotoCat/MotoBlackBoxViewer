@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+using MotoBlackBoxViewer.App.Helpers;
 using MotoBlackBoxViewer.Core.Models;
 
 namespace MotoBlackBoxViewer.App.Models;
@@ -7,7 +7,7 @@ public sealed class TelemetrySessionState
 {
     public List<TelemetryPoint> AllPoints { get; } = new();
 
-    public ObservableCollection<TelemetryPoint> VisiblePoints { get; } = new();
+    public BulkObservableCollection<TelemetryPoint> VisiblePoints { get; } = new();
 
     public string StatusText { get; set; } = "Готово. Откройте CSV-файл.";
 

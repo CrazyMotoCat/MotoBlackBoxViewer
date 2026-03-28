@@ -17,6 +17,7 @@ public partial class App : Application
 
         ICsvTelemetryReader reader = new CsvTelemetryReader();
         ITelemetryAnalyzer analyzer = new TelemetryAnalyzer();
+        var dataProcessor = new TelemetryDataProcessor(analyzer);
         IMapExportService mapExportService = new MapExportService();
         IFileDialogService fileDialogService = new FileDialogService();
         IPlaybackService playbackService = new PlaybackService();
@@ -26,7 +27,7 @@ public partial class App : Application
 
         var workspace = new TelemetryWorkspace(
             reader,
-            analyzer,
+            dataProcessor,
             mapExportService,
             playbackCoordinator,
             sessionPersistenceCoordinator);

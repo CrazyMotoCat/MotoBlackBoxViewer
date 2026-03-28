@@ -133,16 +133,7 @@ public sealed class TelemetrySelectionViewModel : ObservableObject
     }
 
     private int GetVisiblePositionOf(TelemetryPoint? point)
-    {
-        if (point is null)
-            return 0;
-
-        int zeroBased = _data.Points.IndexOf(point);
-        if (zeroBased < 0)
-            zeroBased = _data.Points.ToList().FindIndex(p => p.Index == point.Index);
-
-        return zeroBased >= 0 ? zeroBased + 1 : 0;
-    }
+        => _data.GetVisiblePositionOf(point);
 
     private void Data_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
