@@ -13,7 +13,7 @@
 
 # MotoBlackBoxViewer
 
-Стартовый каркас Windows-приложения на **C# + WPF** для просмотра логов ESP32 с мотоцикла.
+Стартовый каркас Windows-приложения на **C# + WPF + .NET 10** для просмотра логов ESP32 с мотоцикла.
 
 ## Что уже есть
 
@@ -46,6 +46,12 @@
 * CSV parsing теперь поддерживает quoted поля и embedded separators.
 * range filtering теперь режет contiguous slice через `SlicePoints(...)`, а не сканирует весь лог через линейный `Where(...)`.
 * `SessionPersistenceCoordinator` теперь debounce’ит save, умеет `Flush(...)` и репортит ошибки через trace/error handler.
+* `TelemetryWorkspaceCoordinator` теперь подавляет внутренние reactive save-циклы во время load / clear / reset / filter-sync сценариев и дополнительно дедуплицирует одинаковые session-save snapshot'ы.
+* `TelemetrySelectionViewModel` теперь реагирует на реальные изменения visible data (`VisibleDataVersion`), а не на промежуточный `FilterSummary`, что уменьшает лишние selection/property-change эхо.
+* `CsvTelemetryReader` теперь устойчивее к вариантам русских accel-заголовков (`по X` / `поY` family после normalize).
+* solution переведён на `.NET 10` (`net10.0` / `net10.0-windows`) и зафиксирован через `global.json` на SDK `10.0.201`.
+* test project выровнен под `net10.0-windows`, поэтому solution теперь корректно собирается и тестируется вместе с WPF app-layer.
+* после ретаргета удалён лишний `System.Text.Encoding.CodePages` package reference: на `.NET 10` проект и тесты проходят без него.
 * export карты и runtime WebView2 updates используют `MapScriptBuilder` для безопасной передачи route JSON через сериализованную строку и `JSON.parse(...)`.
 * `MapViewControl` уже избегает redundant refresh pushes через cached applied state:
   * `_appliedRouteJson`
@@ -94,7 +100,6 @@ TODO:
 ## NuGet-пакеты
 
 * `Microsoft.Web.WebView2`
-* `System.Text.Encoding.CodePages`
 
 ---
 
@@ -192,6 +197,14 @@ TODO:
 * `TelemetryWorkspaceCoordinator` теперь:
   * не проглатывает `OperationCanceledException` при restore/load
   * выставляет явный `StatusText` при ошибках загрузки
+  * suppress’ит внутренние reactive `Save(...)`-цепочки, когда сам перестраивает filter/selection state
+  * не шлёт повторный identical session snapshot в persistence layer
+* `TelemetrySelectionViewModel` теперь обновляет derived selection/playback properties по `VisibleDataVersion`, а не по промежуточному `FilterSummary`
+* solution переведён на:
+  * `net10.0` для core
+  * `net10.0-windows` для app/tests
+* добавлен `global.json` c SDK `10.0.201`
+* test project переведён на `net10.0-windows`, чтобы быть совместимым с ссылкой на `MotoBlackBoxViewer.App`
 * карта и export переведены на более безопасную передачу route JSON:
   * добавлен `MapScriptBuilder`
   * JSON передаётся через сериализованную строку + `JSON.parse(...)`
@@ -203,6 +216,8 @@ TODO:
   * coordinator failure/cancellation paths
   * map script escaping
   * async command reentrancy/error recovery
+  * workspace-level защиту от лишних session save при internal selection/filter synchronization
+* `dotnet test MotoBlackBoxViewer.sln` сейчас проходит полностью на `.NET 10`: `31 / 31`
 
 ⚠️ Review note:
 
@@ -237,6 +252,8 @@ TODO:
 * session persistence debounce/flush
 * map script escaping
 * async command reentrancy/error recovery
+* workspace-level suppression лишних session save при internal coordinator sync
+* full solution test run (`31 / 31`) на `dotnet test MotoBlackBoxViewer.sln` под `.NET 10`
 
 ⚠️ Review note:
 

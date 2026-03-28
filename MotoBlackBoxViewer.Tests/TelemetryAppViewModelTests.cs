@@ -68,12 +68,14 @@ public sealed class TelemetryAppViewModelTests
         };
 
         data.FilterStartIndex = 2;
+        data.ApplyCurrentFilter(selection.SelectedPoint, updateStatus: false);
         Assert.True(propertyChangedCount > 0);
 
         selection.Dispose();
         propertyChangedCount = 0;
 
         data.FilterStartIndex = 1;
+        data.ApplyCurrentFilter(selection.SelectedPoint, updateStatus: false);
 
         Assert.Equal(0, propertyChangedCount);
     }
@@ -106,6 +108,33 @@ public sealed class TelemetryAppViewModelTests
         selection.Dispose();
     }
 
+    [Fact]
+    public async Task Workspace_LoadCsvAsync_PersistsSessionOnceDespiteInternalSelectionSync()
+    {
+        using WorkspaceTestContext context = CreateWorkspaceContext();
+
+        await context.Workspace.LoadCsvAsync("ride.csv");
+
+        Assert.Single(context.SessionPersistenceCoordinator.SaveCalls);
+        Assert.False(context.SessionPersistenceCoordinator.SaveCalls[0].IncludeSelectedPosition);
+        Assert.Equal(1, context.Workspace.Selection.PlaybackPosition);
+    }
+
+    [Fact]
+    public async Task Workspace_FilterChange_PersistsSessionOnceWithoutSelectionEchoSave()
+    {
+        using WorkspaceTestContext context = CreateWorkspaceContext();
+        await context.Workspace.LoadCsvAsync("ride.csv");
+        context.SessionPersistenceCoordinator.SaveCalls.Clear();
+
+        context.Workspace.Data.FilterStartIndex = 2;
+
+        Assert.Single(context.SessionPersistenceCoordinator.SaveCalls);
+        Assert.False(context.SessionPersistenceCoordinator.SaveCalls[0].IncludeSelectedPosition);
+        Assert.Equal(2, context.Workspace.Selection.SelectedPoint?.Index);
+        Assert.Equal(1, context.Workspace.Selection.PlaybackPosition);
+    }
+
     private static TelemetryDataViewModel CreateLoadedDataViewModel()
     {
         var state = new TelemetrySessionState();
@@ -118,6 +147,26 @@ public sealed class TelemetryAppViewModelTests
         var data = new TelemetryDataViewModel(reader, new TelemetryDataProcessor(new TelemetryAnalyzer()), state);
         data.LoadCsvAsync("ride.csv").GetAwaiter().GetResult();
         return data;
+    }
+
+    private static WorkspaceTestContext CreateWorkspaceContext()
+    {
+        StubCsvTelemetryReader reader = new(
+        [
+            CreatePoint(1, 10),
+            CreatePoint(2, 20),
+            CreatePoint(3, 30)
+        ]);
+        TelemetryDataProcessor dataProcessor = new(new TelemetryAnalyzer());
+        RecordingSessionPersistenceCoordinator sessionPersistenceCoordinator = new();
+        TelemetryWorkspace workspace = new(
+            reader,
+            dataProcessor,
+            new StubMapExportService(),
+            new StubPlaybackCoordinator(),
+            sessionPersistenceCoordinator);
+
+        return new WorkspaceTestContext(workspace, sessionPersistenceCoordinator);
     }
 
     private static TelemetryPoint CreatePoint(int index, double speedKmh)
@@ -163,4 +212,92 @@ public sealed class TelemetryAppViewModelTests
         {
         }
     }
+
+    private sealed class StubPlaybackCoordinator : IPlaybackCoordinator
+    {
+        public StubPlaybackCoordinator()
+        {
+            SpeedOptions =
+            [
+                new PlaybackSpeedOption("0.5x", 0.5),
+                new PlaybackSpeedOption("1x", 1.0),
+                new PlaybackSpeedOption("2x", 2.0)
+            ];
+            SelectedSpeed = SpeedOptions[1];
+        }
+
+        public event EventHandler? Tick
+        {
+            add { }
+            remove { }
+        }
+
+        public IReadOnlyList<PlaybackSpeedOption> SpeedOptions { get; }
+
+        public PlaybackSpeedOption SelectedSpeed { get; private set; }
+
+        public int IntervalMilliseconds => (int)Math.Round(350d / SelectedSpeed.Multiplier);
+
+        public bool IsRunning { get; private set; }
+
+        public bool SetSelectedSpeed(PlaybackSpeedOption option)
+        {
+            if (Equals(option, SelectedSpeed))
+                return false;
+
+            SelectedSpeed = option;
+            return true;
+        }
+
+        public void RestoreSpeed(string? label)
+        {
+            PlaybackSpeedOption? match = SpeedOptions.FirstOrDefault(option => option.Label == label);
+            if (match is not null)
+                SelectedSpeed = match;
+        }
+
+        public void Start() => IsRunning = true;
+
+        public void Stop() => IsRunning = false;
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class RecordingSessionPersistenceCoordinator : ISessionPersistenceCoordinator
+    {
+        public List<SaveCall> SaveCalls { get; } = [];
+
+        public AppSessionSettings Load() => new();
+
+        public void Save(TelemetrySessionState state, string selectedPlaybackSpeedLabel, bool includeSelectedPosition)
+        {
+            SaveCalls.Add(new SaveCall(state.CurrentFilePath, selectedPlaybackSpeedLabel, includeSelectedPosition, state.PlaybackPosition));
+        }
+
+        public void Flush(TelemetrySessionState state, string selectedPlaybackSpeedLabel, bool includeSelectedPosition)
+            => Save(state, selectedPlaybackSpeedLabel, includeSelectedPosition);
+    }
+
+    private sealed class WorkspaceTestContext : IDisposable
+    {
+        public WorkspaceTestContext(TelemetryWorkspace workspace, RecordingSessionPersistenceCoordinator sessionPersistenceCoordinator)
+        {
+            Workspace = workspace;
+            SessionPersistenceCoordinator = sessionPersistenceCoordinator;
+        }
+
+        public TelemetryWorkspace Workspace { get; }
+
+        public RecordingSessionPersistenceCoordinator SessionPersistenceCoordinator { get; }
+
+        public void Dispose() => Workspace.Dispose();
+    }
+
+    private sealed record SaveCall(
+        string? CurrentFilePath,
+        string SelectedPlaybackSpeedLabel,
+        bool IncludeSelectedPosition,
+        int PlaybackPosition);
 }

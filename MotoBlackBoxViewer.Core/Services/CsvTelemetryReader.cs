@@ -23,8 +23,8 @@ public sealed class CsvTelemetryReader : ICsvTelemetryReader
         int lonIndex = FindColumn(headers, "долгота", "longitude", "lon", "lng");
         int speedIndex = FindColumn(headers, "скорость", "speed", "speedkmh");
         int accelZIndex = FindColumn(headers, "ускорениепоz", "accelz", "az");
-        int accelXIndex = FindColumn(headers, "ускорениеpox", "accelx", "ax");
-        int accelYIndex = FindColumn(headers, "ускорениеpoy", "accely", "ay");
+        int accelXIndex = FindColumn(headers, "ускорениепоx", "ускорениеpox", "accelx", "ax");
+        int accelYIndex = FindColumn(headers, "ускорениепоу", "ускорениепоy", "ускорениеpoy", "accely", "ay");
         int leanIndex = FindColumn(headers, "уголнаклона", "lean", "leanangle", "roll");
 
         List<TelemetryPoint> result = new();

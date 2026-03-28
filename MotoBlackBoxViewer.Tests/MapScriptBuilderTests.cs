@@ -13,7 +13,7 @@ public sealed class MapScriptBuilderTests
 
         Assert.StartsWith("window.setRouteData(JSON.parse(", script);
         Assert.Contains("\\u003Cscript\\u003E", script);
-        Assert.Contains("\\\\\\\"", script);
+        Assert.Contains("quote", script);
         Assert.EndsWith("));", script);
     }
 

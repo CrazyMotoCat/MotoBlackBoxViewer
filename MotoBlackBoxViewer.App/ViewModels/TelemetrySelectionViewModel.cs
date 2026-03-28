@@ -18,7 +18,7 @@ public sealed class TelemetrySelectionViewModel : ObservableObject, IDisposable
         _state = state;
 
         _data.PropertyChanged += Data_PropertyChanged;
-        _data.Points.CollectionChanged += Points_CollectionChanged;
+        ((INotifyCollectionChanged)_data.Points).CollectionChanged += Points_CollectionChanged;
     }
 
     public TelemetryPoint? SelectedPoint
@@ -151,7 +151,7 @@ public sealed class TelemetrySelectionViewModel : ObservableObject, IDisposable
 
     private void Data_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(TelemetryDataViewModel.HasPoints) or nameof(TelemetryDataViewModel.FilterSummary))
+        if (e.PropertyName is nameof(TelemetryDataViewModel.HasPoints) or nameof(TelemetryDataViewModel.VisibleDataVersion))
             RaiseSelectionProperties();
     }
 
@@ -176,6 +176,6 @@ public sealed class TelemetrySelectionViewModel : ObservableObject, IDisposable
 
         _isDisposed = true;
         _data.PropertyChanged -= Data_PropertyChanged;
-        _data.Points.CollectionChanged -= Points_CollectionChanged;
+        ((INotifyCollectionChanged)_data.Points).CollectionChanged -= Points_CollectionChanged;
     }
 }

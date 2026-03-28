@@ -8,7 +8,7 @@ which next steps are most valuable.
 
 ## Project Snapshot
 
-* Stack: C# / .NET 8 / WPF
+* Stack: C# / .NET 10 / WPF
 * Solution: `MotoBlackBoxViewer.sln`
 * Main app: `MotoBlackBoxViewer.App`
 * Domain/core logic: `MotoBlackBoxViewer.Core`
@@ -125,7 +125,8 @@ Current automated coverage focuses on the most stable logic:
 * map script escaping
 * async command reentrancy/error recovery
 
-At the time of writing there are 25 unit tests across 7 test files.
+At the time of writing there are 31 unit tests across 8 test files, and
+`dotnet test MotoBlackBoxViewer.sln` is green locally on `.NET 10`.
 
 ⚠️ Review note:
 Missing coverage for:
@@ -155,12 +156,25 @@ The codebase is in a good intermediate state:
   event subscriptions during workspace disposal
 * session persistence now debounce-saves, supports `Flush(...)`, and reports
   save failures through trace/error callbacks
+* `TelemetryWorkspaceCoordinator` now suppresses internal reactive save echoes
+  while it is applying load/filter/reset/clear synchronization itself
+* `TelemetryWorkspaceCoordinator` now also avoids sending identical
+  session-save snapshots repeatedly during the same UI flow
+* `TelemetrySelectionViewModel` now refreshes derived selection state from
+  actual visible-data changes instead of intermediate filter-summary churn
 * CSV loading now handles quoted values and stricter encoding fallback
+* CSV header matching now tolerates more normalized Russian accel aliases
+* the solution now targets `.NET 10`, with `global.json` pinning SDK `10.0.201`
 * map export and runtime WebView2 route sync now use safer JSON-to-JS bridging
 * `MapViewControl` caches applied route/refresh/selection state and coalesces
   pending map updates to avoid redundant pushes
 * tests cover core parsing, analytics, session persistence, and a growing part
-  of the app-layer behavior
+  of the app-layer behavior, including workspace-level guardrails against
+  duplicate session persistence during internal synchronization
+* the test project now targets `net10.0-windows`, which keeps the WPF app
+  reference buildable inside the test solution
+* `System.Text.Encoding.CodePages` package references were removed after the
+  `.NET 10` migration because the solution builds and tests cleanly without them
 
 The main remaining complexity is not in the window anymore, but in screen
 coordination and UI workflow orchestration.
@@ -190,6 +204,8 @@ These are the places most likely to matter in future work:
    ⚠️ Review note:
 
    * risk of becoming central bottleneck for all flows
+   * one small pain point is now improved: internal selection/filter sync no
+     longer fans out into duplicate persistence calls through workspace events
 
 3. `MotoBlackBoxViewer.App/ViewModels/TelemetrySelectionViewModel.cs`
    Selection sync is central to table, charts, map, and playback behavior.
@@ -264,6 +280,8 @@ Suggested work:
 * add tests around workspace disposal and cross-viewmodel event wiring
 * extend coordinator tests down to edge cases and failure paths, not only happy
   path scenarios
+* keep adding workspace-level tests that verify coordinator-driven state changes
+  do not re-enter persistence or other side effects accidentally
 
 ➕ Add:
 
@@ -367,8 +385,8 @@ These are relatively high leverage:
 
 ## Known Environment Notes
 
-* The solution targets `.NET 8`
-* The WPF app targets `net8.0-windows`
+* The solution targets `.NET 10`
+* The WPF app targets `net10.0-windows`
 * Running or testing locally requires a .NET SDK in the environment
 * Embedded map uses WebView2
 * Map tiles rely on internet access because they come from OpenStreetMap
@@ -378,6 +396,7 @@ These are relatively high leverage:
 If you need to rehydrate context quickly in a future conversation:
 
 * This is a WPF telemetry viewer for motorcycle CSV logs.
+* The repo is now pinned to SDK `10.0.201` via `global.json`.
 * The repository is already refactored away from a fat `MainWindow`.
 * The current architectural center is `TelemetryWorkspace` plus
   `TelemetryWorkspaceCoordinator`.

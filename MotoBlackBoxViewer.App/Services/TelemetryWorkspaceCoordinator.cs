@@ -1,3 +1,4 @@
+using System.IO;
 using MotoBlackBoxViewer.App.Interfaces;
 using MotoBlackBoxViewer.App.Models;
 using MotoBlackBoxViewer.App.ViewModels;
@@ -13,7 +14,8 @@ internal sealed class TelemetryWorkspaceCoordinator
     private readonly TelemetryMapViewModel _map;
     private readonly TelemetrySessionState _state;
     private readonly ISessionPersistenceCoordinator _sessionPersistenceCoordinator;
-    private bool _suppressFilterHandling;
+    private int _suppressionDepth;
+    private SaveRequest? _lastSaveRequest;
 
     public TelemetryWorkspaceCoordinator(
         TelemetryDataViewModel data,
@@ -48,7 +50,7 @@ internal sealed class TelemetryWorkspaceCoordinator
         try
         {
             _state.IsRestoringSession = true;
-            _suppressFilterHandling = true;
+            using IDisposable _ = EnterSuppression();
 
             await _data.LoadCsvAsync(session.LastFilePath, cancellationToken);
             _data.RestoreFilterRange(session.FilterStartIndex, session.FilterEndIndex);
@@ -78,7 +80,6 @@ internal sealed class TelemetryWorkspaceCoordinator
         }
         finally
         {
-            _suppressFilterHandling = false;
             _state.IsRestoringSession = false;
         }
     }
@@ -88,7 +89,8 @@ internal sealed class TelemetryWorkspaceCoordinator
     public async Task LoadCsvAsync(string filePath, CancellationToken cancellationToken = default)
     {
         _data.StatusText = "Loading CSV...";
-        _suppressFilterHandling = true;
+
+        using IDisposable _ = EnterSuppression();
 
         try
         {
@@ -111,29 +113,18 @@ internal sealed class TelemetryWorkspaceCoordinator
             _data.StatusText = $"CSV load failed: {ex.Message}";
             throw;
         }
-        finally
-        {
-            _suppressFilterHandling = false;
-        }
     }
 
     public void Clear()
     {
         StopPlayback(updateStatus: false);
-        _suppressFilterHandling = true;
 
-        try
-        {
-            _data.Clear();
-            _selection.Clear();
-            _map.RequestRefresh();
-            _data.StatusText = "Data cleared.";
-            PersistSession(includeSelectedPosition: false);
-        }
-        finally
-        {
-            _suppressFilterHandling = false;
-        }
+        using IDisposable _ = EnterSuppression();
+        _data.Clear();
+        _selection.Clear();
+        _map.RequestRefresh();
+        _data.StatusText = "Data cleared.";
+        PersistSession(includeSelectedPosition: false);
     }
 
     public void ResetFilter()
@@ -142,16 +133,9 @@ internal sealed class TelemetryWorkspaceCoordinator
             return;
 
         StopPlayback(updateStatus: false);
-        _suppressFilterHandling = true;
 
-        try
-        {
-            _data.ResetFilterRange();
-        }
-        finally
-        {
-            _suppressFilterHandling = false;
-        }
+        using IDisposable _ = EnterSuppression();
+        _data.ResetFilterRange();
 
         ApplyFilterAndSynchronize(updateStatus: true);
     }
@@ -187,7 +171,7 @@ internal sealed class TelemetryWorkspaceCoordinator
 
     public void HandleDataPropertyChanged(string? propertyName)
     {
-        if (_state.IsRestoringSession || _suppressFilterHandling)
+        if (_state.IsRestoringSession || IsReactiveHandlingSuppressed)
             return;
 
         if (propertyName is nameof(TelemetryDataViewModel.FilterStartIndex) or nameof(TelemetryDataViewModel.FilterEndIndex))
@@ -199,7 +183,7 @@ internal sealed class TelemetryWorkspaceCoordinator
 
     public void HandleSelectionPropertyChanged(string? propertyName)
     {
-        if (_state.IsRestoringSession)
+        if (_state.IsRestoringSession || IsReactiveHandlingSuppressed)
             return;
 
         if (propertyName is nameof(TelemetrySelectionViewModel.SelectedPoint)
@@ -211,7 +195,7 @@ internal sealed class TelemetryWorkspaceCoordinator
 
     public void HandlePlaybackPropertyChanged(string? propertyName)
     {
-        if (_state.IsRestoringSession)
+        if (_state.IsRestoringSession || IsReactiveHandlingSuppressed)
             return;
 
         if (propertyName is not nameof(TelemetryPlaybackViewModel.SelectedPlaybackSpeed))
@@ -225,6 +209,8 @@ internal sealed class TelemetryWorkspaceCoordinator
 
     private void ApplyFilterAndSynchronize(bool updateStatus)
     {
+        using IDisposable _ = EnterSuppression();
+
         TelemetryPoint? preferredPoint = _state.SelectedPoint;
         TelemetryPoint? nextPoint = _data.ApplyCurrentFilter(preferredPoint, updateStatus);
         _selection.SynchronizeWithVisiblePoints(nextPoint);
@@ -237,6 +223,11 @@ internal sealed class TelemetryWorkspaceCoordinator
         if (_state.IsRestoringSession)
             return;
 
+        SaveRequest request = CreateSaveRequest(includeSelectedPosition);
+        if (Equals(_lastSaveRequest, request))
+            return;
+
+        _lastSaveRequest = request;
         _sessionPersistenceCoordinator.Save(_state, _playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
     }
 
@@ -245,6 +236,53 @@ internal sealed class TelemetryWorkspaceCoordinator
         if (_state.IsRestoringSession)
             return;
 
+        _lastSaveRequest = CreateSaveRequest(includeSelectedPosition);
         _sessionPersistenceCoordinator.Flush(_state, _playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
     }
+
+    private SaveRequest CreateSaveRequest(bool includeSelectedPosition)
+    {
+        return new SaveRequest(
+            _state.CurrentFilePath,
+            _state.FilterStartIndex,
+            _state.FilterEndIndex,
+            _playback.SelectedPlaybackSpeed.Label,
+            includeSelectedPosition,
+            includeSelectedPosition ? _state.PlaybackPosition : 0);
+    }
+
+    private bool IsReactiveHandlingSuppressed => _suppressionDepth > 0;
+
+    private IDisposable EnterSuppression()
+    {
+        _suppressionDepth++;
+        return new SuppressionScope(this);
+    }
+
+    private sealed class SuppressionScope : IDisposable
+    {
+        private TelemetryWorkspaceCoordinator? _owner;
+
+        public SuppressionScope(TelemetryWorkspaceCoordinator owner)
+        {
+            _owner = owner;
+        }
+
+        public void Dispose()
+        {
+            if (_owner is null)
+                return;
+
+            _owner._suppressionDepth--;
+            _owner = null;
+        }
+    }
+
+    private sealed record SaveRequest(
+        string? CurrentFilePath,
+        int FilterStartIndex,
+        int FilterEndIndex,
+        string SelectedPlaybackSpeedLabel,
+        bool IncludeSelectedPosition,
+        int PlaybackPosition);
 }

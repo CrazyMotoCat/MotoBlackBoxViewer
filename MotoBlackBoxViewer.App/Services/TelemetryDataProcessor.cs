@@ -4,7 +4,7 @@ using MotoBlackBoxViewer.Core.Models;
 
 namespace MotoBlackBoxViewer.App.Services;
 
-internal sealed class TelemetryDataProcessor
+public sealed class TelemetryDataProcessor
 {
     private readonly ITelemetryAnalyzer _analyzer;
 
