@@ -1,8 +1,9 @@
+using MotoBlackBoxViewer.Core.Interfaces;
 using MotoBlackBoxViewer.Core.Models;
 
 namespace MotoBlackBoxViewer.Core.Services;
 
-public sealed class TelemetryAnalyzer
+public sealed class TelemetryAnalyzer : ITelemetryAnalyzer
 {
     public TelemetryStatistics Analyze(IReadOnlyList<TelemetryPoint> points)
     {

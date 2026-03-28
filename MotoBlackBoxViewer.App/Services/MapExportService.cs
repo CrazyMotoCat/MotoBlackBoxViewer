@@ -1,11 +1,12 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using MotoBlackBoxViewer.App.Interfaces;
 using MotoBlackBoxViewer.Core.Models;
 
 namespace MotoBlackBoxViewer.App.Services;
 
-public sealed class MapExportService
+public sealed class MapExportService : IMapExportService
 {
     public string GetTemplatePath()
     {

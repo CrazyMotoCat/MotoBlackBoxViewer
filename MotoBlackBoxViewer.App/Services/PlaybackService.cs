@@ -1,8 +1,9 @@
 using System.Windows.Threading;
+using MotoBlackBoxViewer.App.Interfaces;
 
 namespace MotoBlackBoxViewer.App.Services;
 
-public sealed class PlaybackService : IDisposable
+public sealed class PlaybackService : IPlaybackService
 {
     private readonly DispatcherTimer _timer;
 

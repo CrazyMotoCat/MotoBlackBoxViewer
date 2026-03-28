@@ -1,8 +1,9 @@
 using Microsoft.Win32;
+using MotoBlackBoxViewer.App.Interfaces;
 
 namespace MotoBlackBoxViewer.App.Services;
 
-public sealed class FileDialogService
+public sealed class FileDialogService : IFileDialogService
 {
     public string? PickCsvFile()
     {
