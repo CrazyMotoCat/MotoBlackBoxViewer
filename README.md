@@ -58,6 +58,29 @@
   * `_appliedRefreshVersion`
   * `_appliedSelectedPointIndex`
 * live map sync теперь coalesced: параллельные route/selection updates не разрастаются в россыпь независимых fire-and-forget задач.
+* базовая визуальная тема уже начала уходить от старого default-WPF вида к более целостной кастомной desktop-палитре.
+
+---
+
+## UI Direction
+
+Текущий следующий визуальный фокус после `.NET 10` migration и app-layer stabilization:
+
+* уйти от тяжелой бордовой заливки больших поверхностей к более нейтральной графитовой базе
+* оставить бордовый как accent, а не как основной surface color
+* сделать toolbar визуально современнее:
+  * компактнее
+  * с более четким разделением primary / secondary actions
+* собрать playback в одну аккуратную control line
+* ужать block range filtering по высоте и сделать его более информационно плотным
+* облегчить map overlays:
+  * меньше тени
+  * компактнее карточки
+  * сильнее типографическая иерархия
+
+⚠️ Review note:
+
+* текущая красная тема уже лучше исходной темно-синей, но still считается промежуточной и будет дорабатываться в сторону более professional / less heavy dark UI
 
 ---
 
@@ -237,6 +260,10 @@ TODO:
 * streaming CSV
 * malformed-row diagnostics
 * оптимизацию графиков
+* второй проход по UI polish:
+  * graphite-first palette
+  * denser toolbar/playback/filter layout
+  * lighter map overlays
 
 ---
 

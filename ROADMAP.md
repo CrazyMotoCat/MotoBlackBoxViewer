@@ -184,6 +184,28 @@ coordination and UI workflow orchestration.
 * chart rendering still performs full redraws and data reconstruction on updates,
   which may degrade performance on large datasets
 
+## Current UX Direction
+
+The project is now past the baseline technical stabilization stage and has
+entered a UI polish pass.
+
+Current design direction:
+
+* keep the app dark, but shift large surfaces toward neutral graphite instead of
+  heavy dark red
+* treat burgundy/red as an accent color, not as the primary base background
+* compress top-level controls into denser desktop-style control rows
+* make playback and range filtering visually tighter and easier to scan
+* reduce visual weight of map overlays and supporting chrome
+
+Recent review feedback to carry forward:
+
+* the current red-heavy palette still feels too dense on large surfaces
+* the toolbar needs clearer primary vs. secondary action hierarchy
+* the playback row should read as one cohesive control strip
+* the range filter block should be shorter and more information-dense
+* map overlay cards should become lighter and more typographically refined
+
 ## Highest-Value Hotspots
 
 These are the places most likely to matter in future work:
@@ -338,6 +360,11 @@ Goal: move from capable prototype to smoother daily-use desktop tool.
 
 Suggested work:
 
+* complete the second-pass visual cleanup:
+  * graphite-first palette
+  * accent-only burgundy usage
+  * denser toolbar and control rows
+  * lighter map cards
 * explicit settings screen
 * clearer empty/loading/error states
 * better large-file responsiveness
@@ -357,15 +384,17 @@ If continuing development soon, the best order is:
 
 1. Add more app-layer tests around selection, playback, restore, and clear
    flows on top of the new baseline coverage.
-2. Refactor `TelemetryWorkspaceCoordinator` into smaller scenario-focused
+2. Finish the current UI polish pass so the visual baseline is coherent before
+   more user-facing features land.
+3. Refactor `TelemetryWorkspaceCoordinator` into smaller scenario-focused
    pieces if its responsibilities keep growing.
-3. Split `TelemetrySessionState` if new coordination or persistence fields keep
+4. Split `TelemetrySessionState` if new coordination or persistence fields keep
    accumulating.
-4. Only then expand user-facing features like advanced filters or multi-file
+5. Only then expand user-facing features like advanced filters or multi-file
    comparison.
 
 ➕ Add:
-5. Introduce streaming CSV parsing and malformed-row diagnostics before
+6. Introduce streaming CSV parsing and malformed-row diagnostics before
    expanding data sources.
 
 ## Good First Refactors
