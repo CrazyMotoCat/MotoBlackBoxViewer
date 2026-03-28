@@ -92,6 +92,15 @@ Key areas:
 * `Services/TelemetryWorkspaceCoordinator.cs`
   Main cross-cutting orchestration layer between data, selection, playback,
   map, and session persistence.
+* `Services/TelemetryWorkspaceSynchronizationService.cs`
+  Small app-layer service for visible-data / selection / map synchronization
+  steps used by load, restore, filter, and clear flows.
+* `Services/TelemetryWorkspacePersistenceService.cs`
+  Small app-layer service for deduplicated save / flush session orchestration.
+* `Services/TelemetryWorkspaceLoadService.cs`
+  Small app-layer service for CSV loading scenario orchestration.
+* `Services/TelemetryWorkspaceSessionRestoreService.cs`
+  Small app-layer service for last-session restore orchestration.
 
 Supporting services and abstractions already exist for:
 
@@ -129,7 +138,7 @@ Current automated coverage focuses on the most stable logic:
 * map script escaping
 * async command reentrancy/error recovery
 
-At the time of writing there are 31 unit tests across 8 test files, and
+At the time of writing there are 36 unit tests across 8 test files, and
 `dotnet test MotoBlackBoxViewer.sln` is green locally on `.NET 10`.
 
 ⚠️ Review note:
@@ -164,6 +173,12 @@ The codebase is in a good intermediate state:
   while it is applying load/filter/reset/clear synchronization itself
 * `TelemetryWorkspaceCoordinator` now also avoids sending identical
   session-save snapshots repeatedly during the same UI flow
+* some coordinator responsibilities are now starting to move outward into
+  narrower helpers:
+  * `TelemetryWorkspaceSynchronizationService`
+  * `TelemetryWorkspacePersistenceService`
+  * `TelemetryWorkspaceLoadService`
+  * `TelemetryWorkspaceSessionRestoreService`
 * `TelemetrySelectionViewModel` now refreshes derived selection state from
   actual visible-data changes instead of intermediate filter-summary churn
 * CSV loading now handles quoted values and stricter encoding fallback

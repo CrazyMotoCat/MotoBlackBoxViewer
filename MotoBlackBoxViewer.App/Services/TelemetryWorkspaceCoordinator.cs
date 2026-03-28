@@ -9,13 +9,14 @@ namespace MotoBlackBoxViewer.App.Services;
 internal sealed class TelemetryWorkspaceCoordinator
 {
     private readonly TelemetryDataViewModel _data;
-    private readonly TelemetrySelectionViewModel _selection;
     private readonly TelemetryPlaybackViewModel _playback;
     private readonly TelemetryMapViewModel _map;
     private readonly TelemetrySessionState _state;
-    private readonly ISessionPersistenceCoordinator _sessionPersistenceCoordinator;
+    private readonly TelemetryWorkspaceSynchronizationService _synchronization;
+    private readonly TelemetryWorkspacePersistenceService _persistence;
+    private readonly TelemetryWorkspaceLoadService _load;
+    private readonly TelemetryWorkspaceSessionRestoreService _sessionRestore;
     private int _suppressionDepth;
-    private SaveRequest? _lastSaveRequest;
 
     public TelemetryWorkspaceCoordinator(
         TelemetryDataViewModel data,
@@ -26,20 +27,18 @@ internal sealed class TelemetryWorkspaceCoordinator
         ISessionPersistenceCoordinator sessionPersistenceCoordinator)
     {
         _data = data;
-        _selection = selection;
         _playback = playback;
         _map = map;
         _state = state;
-        _sessionPersistenceCoordinator = sessionPersistenceCoordinator;
+        _synchronization = new TelemetryWorkspaceSynchronizationService(data, selection, map, state);
+        _persistence = new TelemetryWorkspacePersistenceService(sessionPersistenceCoordinator);
+        _load = new TelemetryWorkspaceLoadService(data, _synchronization);
+        _sessionRestore = new TelemetryWorkspaceSessionRestoreService(data, playback, _synchronization);
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
-        AppSessionSettings session = _sessionPersistenceCoordinator.Load();
-        _playback.RestoreSpeed(session.SelectedPlaybackSpeedLabel);
-
-        if (string.IsNullOrWhiteSpace(session.LastFilePath))
-            return;
+        AppSessionSettings session = _persistence.Load();
 
         if (!File.Exists(session.LastFilePath))
         {
@@ -52,23 +51,9 @@ internal sealed class TelemetryWorkspaceCoordinator
             _state.IsRestoringSession = true;
             using IDisposable _ = EnterSuppression();
 
-            await _data.LoadCsvAsync(session.LastFilePath, cancellationToken);
-            _data.RestoreFilterRange(session.FilterStartIndex, session.FilterEndIndex);
-
-            TelemetryPoint? preferredPoint = _data.ApplyCurrentFilter(_state.SelectedPoint, updateStatus: false);
-            _selection.SynchronizeWithVisiblePoints(preferredPoint);
-
-            if (_data.HasPoints)
-            {
-                int restoredPosition = session.SelectedVisiblePosition <= 0
-                    ? 1
-                    : Math.Clamp(session.SelectedVisiblePosition, 1, _selection.PlaybackMaximum);
-
-                _selection.PlaybackPosition = restoredPosition;
-            }
-
-            _map.RequestRefresh();
-            _data.StatusText = $"Сессия восстановлена: {Path.GetFileName(session.LastFilePath)}.";
+            string? status = await _sessionRestore.RestoreLastSessionAsync(session, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(status))
+                _data.StatusText = status;
         }
         catch (OperationCanceledException)
         {
@@ -94,13 +79,7 @@ internal sealed class TelemetryWorkspaceCoordinator
 
         try
         {
-            await _data.LoadCsvAsync(filePath, cancellationToken);
-
-            TelemetryPoint? preferredPoint = _data.ApplyCurrentFilter(_state.SelectedPoint, updateStatus: false);
-            _selection.SynchronizeWithVisiblePoints(preferredPoint);
-            _map.RequestRefresh();
-
-            _data.StatusText = $"Файл {Path.GetFileName(filePath)} открыт: {_data.FilterMaximum} точек, в текущем диапазоне {_data.Points.Count}.";
+            _data.StatusText = await _load.LoadCsvAsync(filePath, cancellationToken);
             PersistSession(includeSelectedPosition: false);
         }
         catch (OperationCanceledException)
@@ -120,9 +99,7 @@ internal sealed class TelemetryWorkspaceCoordinator
         StopPlayback(updateStatus: false);
 
         using IDisposable _ = EnterSuppression();
-        _data.Clear();
-        _selection.Clear();
-        _map.RequestRefresh();
+        _synchronization.ClearWorkspace();
         _data.StatusText = "Сессия очищена.";
         PersistSession(includeSelectedPosition: false);
     }
@@ -210,46 +187,15 @@ internal sealed class TelemetryWorkspaceCoordinator
     private void ApplyFilterAndSynchronize(bool updateStatus)
     {
         using IDisposable _ = EnterSuppression();
-
-        TelemetryPoint? preferredPoint = _state.SelectedPoint;
-        TelemetryPoint? nextPoint = _data.ApplyCurrentFilter(preferredPoint, updateStatus);
-        _selection.SynchronizeWithVisiblePoints(nextPoint);
-        _map.RequestRefresh();
+        _synchronization.SynchronizeAfterLoad(updateStatus);
         PersistSession(includeSelectedPosition: false);
     }
 
     private void PersistSession(bool includeSelectedPosition)
-    {
-        if (_state.IsRestoringSession)
-            return;
-
-        SaveRequest request = CreateSaveRequest(includeSelectedPosition);
-        if (Equals(_lastSaveRequest, request))
-            return;
-
-        _lastSaveRequest = request;
-        _sessionPersistenceCoordinator.Save(_state, _playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
-    }
+        => _persistence.Save(_state, _playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
 
     private void FlushSession(bool includeSelectedPosition)
-    {
-        if (_state.IsRestoringSession)
-            return;
-
-        _lastSaveRequest = CreateSaveRequest(includeSelectedPosition);
-        _sessionPersistenceCoordinator.Flush(_state, _playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
-    }
-
-    private SaveRequest CreateSaveRequest(bool includeSelectedPosition)
-    {
-        return new SaveRequest(
-            _state.CurrentFilePath,
-            _state.FilterStartIndex,
-            _state.FilterEndIndex,
-            _playback.SelectedPlaybackSpeed.Label,
-            includeSelectedPosition,
-            includeSelectedPosition ? _state.PlaybackPosition : 0);
-    }
+        => _persistence.Flush(_state, _playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
 
     private bool IsReactiveHandlingSuppressed => _suppressionDepth > 0;
 
@@ -278,11 +224,4 @@ internal sealed class TelemetryWorkspaceCoordinator
         }
     }
 
-    private sealed record SaveRequest(
-        string? CurrentFilePath,
-        int FilterStartIndex,
-        int FilterEndIndex,
-        string SelectedPlaybackSpeedLabel,
-        bool IncludeSelectedPosition,
-        int PlaybackPosition);
 }

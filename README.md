@@ -47,6 +47,11 @@
 * range filtering теперь режет contiguous slice через `SlicePoints(...)`, а не сканирует весь лог через линейный `Where(...)`.
 * `SessionPersistenceCoordinator` теперь debounce’ит save, умеет `Flush(...)` и репортит ошибки через trace/error handler.
 * `TelemetryWorkspaceCoordinator` теперь подавляет внутренние reactive save-циклы во время load / clear / reset / filter-sync сценариев и дополнительно дедуплицирует одинаковые session-save snapshot'ы.
+* из `TelemetryWorkspaceCoordinator` уже начато выносить сценарные обязанности:
+  * `TelemetryWorkspaceSynchronizationService` держит data/selection/map synchronization steps
+  * `TelemetryWorkspacePersistenceService` держит deduped save / flush session logic
+  * `TelemetryWorkspaceLoadService` держит CSV load scenario
+  * `TelemetryWorkspaceSessionRestoreService` держит last-session restore scenario
 * `TelemetrySelectionViewModel` теперь реагирует на реальные изменения visible data (`VisibleDataVersion`), а не на промежуточный `FilterSummary`, что уменьшает лишние selection/property-change эхо.
 * `CsvTelemetryReader` теперь устойчивее к вариантам русских accel-заголовков (`по X` / `поY` family после normalize).
 * solution переведён на `.NET 10` (`net10.0` / `net10.0-windows`) и зафиксирован через `global.json` на SDK `10.0.201`.
@@ -72,6 +77,11 @@
   * playback strip сильнее центрирован вокруг slider, а speed/meta стали вторичнее
   * chart tabs получили info-rows над графиками, а statistics tab теперь заполнен не только верхним metric grid
   * session summary / status bar стали более product-like: filename сильнее, metadata слабее, статусы менее debug-oriented
+* app-layer test safety net тоже расширен:
+  * restore missing-file path
+  * reset / clear persistence contracts
+  * restart playback from the end
+  * selected playback-position persistence
 * встроенная карта больше не грузится как `file://` page:
   * `MapViewControl` теперь открывает map HTML через локальный `https` host mapping WebView2
   * это нужно для совместимости с текущей tile policy OpenStreetMap, где tile requests ожидают корректный `Referer`
