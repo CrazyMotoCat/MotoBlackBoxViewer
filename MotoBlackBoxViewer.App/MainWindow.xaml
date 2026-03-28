@@ -37,61 +37,33 @@
                 CornerRadius="14"
                 Padding="12"
                 Margin="0,0,0,12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <WrapPanel Grid.Column="0"
-                           VerticalAlignment="Center"
-                           ItemHeight="32"
-                           Margin="0,0,6,0">
-                    <Button Style="{StaticResource ToolbarPrimaryButtonStyle}"
-                            Content="Импорт CSV"
-                            Margin="0,0,6,0"
-                            Command="{Binding OpenCsvCommand}" />
-                    <Button Style="{StaticResource ToolbarButtonStyle}"
-                            Content="Карта"
-                            Margin="0,0,6,0"
-                            Command="{Binding RefreshMapCommand}" />
-                    <Button Style="{StaticResource ToolbarButtonStyle}"
-                            Content="Браузер"
-                            Margin="0,0,8,0"
-                            Command="{Binding OpenMapCommand}" />
-                    <Border Width="1"
-                            Height="18"
-                            Background="{StaticResource BorderBrushTheme}"
-                            Margin="2,7,8,7" />
-                    <Button Style="{StaticResource ToolbarButtonStyle}"
-                            Content="Сброс"
-                            Margin="0,0,6,0"
-                            Command="{Binding ResetFilterCommand}" />
-                    <Button Style="{StaticResource ToolbarButtonStyle}"
-                            Content="Очистить"
-                            Command="{Binding ClearCommand}" />
-                </WrapPanel>
-
-                <Border Grid.Column="1"
-                        Background="{StaticResource SurfaceSubtleBrush}"
-                        BorderBrush="{StaticResource BorderSoftBrush}"
-                        BorderThickness="1"
-                        CornerRadius="10"
-                        Padding="12,8"
-                        Margin="12,0,0,0"
-                        VerticalAlignment="Center">
-                    <StackPanel>
-                        <TextBlock Text="{Binding Workspace.Data.CurrentFileName, TargetNullValue=Сессия не загружена}"
-                                   Foreground="{StaticResource TextBrushTheme}"
-                                   FontSize="13"
-                                   FontWeight="SemiBold" />
-                        <TextBlock Text="{Binding Workspace.Data.FilterSummary}"
-                                   Foreground="{StaticResource MutedTextSoftBrush}"
-                                   FontSize="11"
-                                   Margin="0,3,0,0" />
-                    </StackPanel>
-                </Border>
-            </Grid>
+            <WrapPanel VerticalAlignment="Center"
+                       ItemHeight="32"
+                       Margin="0,0,6,0">
+                <Button Style="{StaticResource ToolbarPrimaryButtonStyle}"
+                        Content="Импорт CSV"
+                        Margin="0,0,6,0"
+                        Command="{Binding OpenCsvCommand}" />
+                <Button Style="{StaticResource ToolbarButtonStyle}"
+                        Content="Карта"
+                        Margin="0,0,6,0"
+                        Command="{Binding RefreshMapCommand}" />
+                <Button Style="{StaticResource ToolbarButtonStyle}"
+                        Content="Браузер"
+                        Margin="0,0,8,0"
+                        Command="{Binding OpenMapCommand}" />
+                <Border Width="1"
+                        Height="18"
+                        Background="{StaticResource BorderBrushTheme}"
+                        Margin="2,7,8,7" />
+                <Button Style="{StaticResource ToolbarButtonStyle}"
+                        Content="Сброс"
+                        Margin="0,0,6,0"
+                        Command="{Binding ResetFilterCommand}" />
+                <Button Style="{StaticResource ToolbarButtonStyle}"
+                        Content="Очистить"
+                        Command="{Binding ClearCommand}" />
+            </WrapPanel>
         </Border>
 
         <Grid Grid.Row="1">
@@ -448,9 +420,24 @@
                                                Foreground="{StaticResource MutedTextSoftBrush}"
                                                FontSize="11"
                                                FontWeight="SemiBold" />
-                                    <TextBlock Text="Выберите строку справа или используйте playback и диапазон, чтобы синхронно сфокусировать карту, графики и статистику."
+                                    <TextBlock Text="Как быстрее смотреть заезд"
+                                               Foreground="{StaticResource TextBrushTheme}"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               Margin="0,8,0,0" />
+                                    <TextBlock Text="Выберите точку в таблице справа — карта и графики сразу сфокусируются на ней."
                                                Foreground="{StaticResource MutedTextBrush}"
                                                FontSize="12"
+                                               TextWrapping="Wrap"
+                                               Margin="0,8,0,0" />
+                                    <TextBlock Text="Playback удобно использовать для пошагового просмотра маршрута, а диапазон — чтобы быстро сузить интересный участок."
+                                               Foreground="{StaticResource MutedTextBrush}"
+                                               FontSize="12"
+                                               TextWrapping="Wrap"
+                                               Margin="0,6,0,0" />
+                                    <TextBlock Text="Выбранная точка ниже карты показывает ключевые значения без дублирования поверх маршрута."
+                                               Foreground="{StaticResource MutedTextSoftBrush}"
+                                               FontSize="11"
                                                TextWrapping="Wrap"
                                                Margin="0,8,0,0" />
                                 </StackPanel>
@@ -762,45 +749,23 @@
                 CornerRadius="12"
                 Padding="10"
                 Margin="0,12,0,0">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Orientation="Horizontal"
-                            Margin="0,0,18,0">
-                    <TextBlock Text="{Binding Workspace.Data.CurrentFileName}"
-                               Foreground="{StaticResource TextBrushTheme}"
-                               FontSize="13"
-                               FontWeight="SemiBold" />
-                    <TextBlock Text="  •  "
+            <Border Background="{StaticResource SurfaceSubtleBrush}"
+                    BorderBrush="{StaticResource BorderSoftBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8"
+                    Padding="10,5"
+                    HorizontalAlignment="Right">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Статус"
                                Foreground="{StaticResource MutedTextSoftBrush}"
-                               FontSize="13" />
-                    <TextBlock Text="{Binding Workspace.Data.FilterSummary}"
-                               Foreground="{StaticResource MutedTextBrush}"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Margin="0,0,10,0" />
+                    <TextBlock Text="{Binding Workspace.Data.StatusText}"
+                               Foreground="{StaticResource TextBrushTheme}"
                                FontSize="12" />
                 </StackPanel>
-
-                <Border Grid.Column="1"
-                        Background="{StaticResource SurfaceSubtleBrush}"
-                        BorderBrush="{StaticResource BorderSoftBrush}"
-                        BorderThickness="1"
-                        CornerRadius="8"
-                        Padding="10,5"
-                        HorizontalAlignment="Right">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="Статус"
-                                   Foreground="{StaticResource MutedTextSoftBrush}"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,10,0" />
-                        <TextBlock Text="{Binding Workspace.Data.StatusText}"
-                                   Foreground="{StaticResource TextBrushTheme}"
-                                   FontSize="12" />
-                    </StackPanel>
-                </Border>
-            </Grid>
+            </Border>
         </Border>
     </Grid>
 </Window>

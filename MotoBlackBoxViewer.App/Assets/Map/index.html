@@ -28,26 +28,16 @@
       font-size: 13px;
       line-height: 1.35;
     }
-    #pointCard {
-      left: 12px;
-      bottom: 12px;
-      padding: 12px 14px;
-      min-width: 270px;
-      font-size: 13px;
-      line-height: 1.45;
+    #status.hidden {
+      display: none;
     }
-    #pointCard .muted, #status .muted { color: #b89aa4; }
-    #pointCard .title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    #status .muted { color: #b89aa4; }
     .leaflet-control-attribution { font-size: 11px; }
   </style>
 </head>
-<body>
+  <body>
   <div id="map"></div>
   <div id="status" class="panel">Карта готова. Загрузите CSV в приложении.</div>
-  <div id="pointCard" class="panel">
-    <div class="title">Текущая точка</div>
-    <div class="muted">Точка еще не выбрана</div>
-  </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
@@ -62,14 +52,14 @@
     let lastPanAt = 0;
 
     const statusEl = document.getElementById('status');
-    const pointCardEl = document.getElementById('pointCard');
 
     function setStatus(text) {
+      statusEl.classList.remove('hidden');
       statusEl.innerHTML = text;
     }
 
-    function setPointCardHtml(html) {
-      pointCardEl.innerHTML = html;
+    function hideStatus() {
+      statusEl.classList.add('hidden');
     }
 
     function initMap() {
@@ -115,7 +105,6 @@
 
       if (!routeData.length) {
         setStatus('Маршрут пуст. Откройте CSV-файл.');
-        setPointCardHtml('<div class="title">Текущая точка</div><div class="muted">Точка еще не выбрана</div>');
         return;
       }
 
@@ -146,7 +135,7 @@
       }).addTo(map).bindTooltip('Финиш');
 
       map.fitBounds(routeLine.getBounds(), { padding: [28, 28] });
-      setStatus(`Маршрут загружен: <b>${routeData.length}</b> точек. Выберите строку справа, чтобы подсветить точку.`);
+      hideStatus();
     }
 
     function setSelectedIndex(index) {
@@ -159,8 +148,6 @@
           map.removeLayer(selectedMarker);
           selectedMarker = null;
         }
-
-        setPointCardHtml('<div class="title">Текущая точка</div><div class="muted">Точка еще не выбрана</div>');
         return;
       }
 
@@ -188,15 +175,6 @@
         duration: shouldAnimatePan ? 0.25 : 0
       });
       lastPanAt = now;
-
-      setPointCardHtml(`
-        <div class="title">Точка #${point.index}</div>
-        <div>Координаты: <b>${point.lat.toFixed(6)}, ${point.lon.toFixed(6)}</b></div>
-        <div>Скорость: <b>${point.speedKmh.toFixed(1)} км/ч</b></div>
-        <div>Угол наклона: <b>${point.leanAngleDeg.toFixed(1)}°</b></div>
-        <div>Ускорения: <b>X ${point.accelX.toFixed(2)}</b> · <b>Y ${point.accelY.toFixed(2)}</b> · <b>Z ${point.accelZ.toFixed(2)}</b></div>
-        <div class="muted">Дистанция от старта: ${point.distanceMeters.toFixed(1)} м</div>
-      `);
     }
 
     function clearRouteData() {
@@ -204,7 +182,6 @@
       routeDataByIndex = new Map();
       clearMapObjects();
       setStatus('Маршрут очищен. Загрузите CSV в приложении.');
-      setPointCardHtml('<div class="title">Текущая точка</div><div class="muted">Точка еще не выбрана</div>');
     }
 
     window.setRouteData = setRouteData;
