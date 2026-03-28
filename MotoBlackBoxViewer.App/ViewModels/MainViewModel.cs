@@ -33,6 +33,7 @@ public sealed class MainViewModel : IDisposable
         TogglePlaybackCommand = new RelayCommand(() => Workspace.TogglePlayback(), () => Workspace.HasPoints);
 
         Workspace.PropertyChanged += Workspace_PropertyChanged;
+        Workspace.Data.PropertyChanged += WorkspaceData_PropertyChanged;
     }
 
     public TelemetryWorkspace Workspace { get; }
@@ -66,7 +67,7 @@ public sealed class MainViewModel : IDisposable
         }
         catch (Exception ex)
         {
-            Workspace.StatusText = $"Ошибка загрузки CSV: {ex.Message}";
+            Workspace.Data.StatusText = $"Ошибка загрузки CSV: {ex.Message}";
         }
     }
 
@@ -74,6 +75,15 @@ public sealed class MainViewModel : IDisposable
     {
         if (e.PropertyName is nameof(TelemetryWorkspace.HasPoints) or nameof(TelemetryWorkspace.HasSourceData))
             RaiseCommandCanExecuteChanged();
+    }
+
+    private void WorkspaceData_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(TelemetryWorkspace.HasPoints) or nameof(TelemetryWorkspace.HasSourceData)
+            or nameof(TelemetryDataViewModel.HasPoints) or nameof(TelemetryDataViewModel.HasSourceData))
+        {
+            RaiseCommandCanExecuteChanged();
+        }
     }
 
     private void RaiseCommandCanExecuteChanged()
@@ -93,6 +103,7 @@ public sealed class MainViewModel : IDisposable
 
         _isDisposed = true;
         Workspace.PropertyChanged -= Workspace_PropertyChanged;
+        Workspace.Data.PropertyChanged -= WorkspaceData_PropertyChanged;
         Workspace.Dispose();
     }
 }
