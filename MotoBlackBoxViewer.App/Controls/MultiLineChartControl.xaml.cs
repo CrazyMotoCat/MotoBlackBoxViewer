@@ -28,6 +28,12 @@ public partial class MultiLineChartControl : UserControl
         typeof(MultiLineChartControl),
         new PropertyMetadata(string.Empty, OnChartPropertyChanged));
 
+    public static readonly DependencyProperty WindowRadiusProperty = DependencyProperty.Register(
+        nameof(WindowRadius),
+        typeof(int),
+        typeof(MultiLineChartControl),
+        new PropertyMetadata(0, OnChartPropertyChanged));
+
     public MultiLineChartControl()
     {
         InitializeComponent();
@@ -51,6 +57,12 @@ public partial class MultiLineChartControl : UserControl
         set => SetValue(UnitProperty, value);
     }
 
+    public int WindowRadius
+    {
+        get => (int)GetValue(WindowRadiusProperty);
+        set => SetValue(WindowRadiusProperty, value);
+    }
+
     private static void OnChartPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((MultiLineChartControl)d).ScheduleRedraw();
 
@@ -72,6 +84,7 @@ public partial class MultiLineChartControl : UserControl
     private void Redraw()
     {
         var series = Series ?? Array.Empty<ChartSeriesDefinition>();
-        ChartRenderHelper.DrawMultiSeries(ChartCanvas, series, Unit, SelectedIndex);
+        (IReadOnlyList<ChartSeriesDefinition> windowedSeries, int? windowedSelectedIndex) = ChartViewportHelper.SliceSeries(series, SelectedIndex, WindowRadius);
+        ChartRenderHelper.DrawMultiSeries(ChartCanvas, windowedSeries, Unit, windowedSelectedIndex);
     }
 }

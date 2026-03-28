@@ -16,7 +16,9 @@ public sealed class PlaybackCoordinator : IPlaybackCoordinator
             new PlaybackSpeedOption("0.5x", 0.5),
             new PlaybackSpeedOption("1x", 1.0),
             new PlaybackSpeedOption("2x", 2.0),
-            new PlaybackSpeedOption("4x", 4.0)
+            new PlaybackSpeedOption("4x", 4.0),
+            new PlaybackSpeedOption("8x", 8.0),
+            new PlaybackSpeedOption("16x", 16.0)
         };
 
         SelectedSpeed = SpeedOptions[2];

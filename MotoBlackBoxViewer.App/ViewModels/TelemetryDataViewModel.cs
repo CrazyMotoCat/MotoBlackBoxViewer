@@ -9,12 +9,21 @@ namespace MotoBlackBoxViewer.App.ViewModels;
 
 public sealed class TelemetryDataViewModel : ObservableObject
 {
+    private static readonly ChartWindowOption[] DefaultChartWindowOptions =
+    [
+        new("500 до / 500 после", 500),
+        new("1000 до / 1000 после", 1000),
+        new("5000 до / 5000 после", 5000),
+        new("Весь диапазон", 0)
+    ];
+
     private readonly ICsvTelemetryReader _reader;
     private readonly TelemetryDataProcessor _dataProcessor;
     private readonly TelemetrySessionState _state;
     private IReadOnlyDictionary<int, int> _visiblePositionsByPointIndex = new Dictionary<int, int>();
     private TelemetrySeriesSnapshot _seriesSnapshot = TelemetrySeriesSnapshot.Empty;
     private int _visibleDataVersion;
+    private ChartWindowOption _selectedChartWindow = DefaultChartWindowOptions[1];
 
     public TelemetryDataViewModel(
         ICsvTelemetryReader reader,
@@ -28,6 +37,29 @@ public sealed class TelemetryDataViewModel : ObservableObject
     }
 
     public ReadOnlyObservableCollection<TelemetryPoint> Points { get; }
+
+    public IReadOnlyList<ChartWindowOption> ChartWindowOptions => DefaultChartWindowOptions;
+
+    public ChartWindowOption SelectedChartWindow
+    {
+        get => _selectedChartWindow;
+        set
+        {
+            if (value is null || Equals(_selectedChartWindow, value))
+                return;
+
+            _selectedChartWindow = value;
+            RaisePropertyChanged();
+            RaisePropertyChanged(nameof(ChartWindowRadius));
+            RaisePropertyChanged(nameof(ChartWindowSummary));
+        }
+    }
+
+    public int ChartWindowRadius => _selectedChartWindow.Radius;
+
+    public string ChartWindowSummary => _selectedChartWindow.IsFullRange
+        ? "График показывает весь текущий диапазон."
+        : $"График показывает по {_selectedChartWindow.Radius} точек до и после текущей.";
 
     public string StatusText
     {

@@ -14,6 +14,7 @@ public sealed class TelemetryMapViewModel : ObservableObject, IDisposable
     private readonly IMapExportService _mapExportService;
     private readonly TelemetrySessionState _state;
     private string _routeJson = "[]";
+    private bool _isManualScrubbing;
     private bool _isDisposed;
 
     public TelemetryMapViewModel(
@@ -35,6 +36,23 @@ public sealed class TelemetryMapViewModel : ObservableObject, IDisposable
 
     public int? SelectedPointIndex => _selection.SelectedPointIndex;
 
+    public double? SelectedPointLatitude => _selection.SelectedPoint?.Latitude;
+
+    public double? SelectedPointLongitude => _selection.SelectedPoint?.Longitude;
+
+    public bool IsManualScrubbing
+    {
+        get => _isManualScrubbing;
+        private set
+        {
+            if (_isManualScrubbing == value)
+                return;
+
+            _isManualScrubbing = value;
+            RaisePropertyChanged();
+        }
+    }
+
     public int RefreshVersion
     {
         get => _state.MapRefreshVersion;
@@ -49,6 +67,9 @@ public sealed class TelemetryMapViewModel : ObservableObject, IDisposable
     }
 
     public void RequestRefresh() => RefreshVersion++;
+
+    public void SetManualScrubbing(bool isManualScrubbing)
+        => IsManualScrubbing = isManualScrubbing;
 
     public string ExportMapHtml()
     {
@@ -75,6 +96,13 @@ public sealed class TelemetryMapViewModel : ObservableObject, IDisposable
     {
         if (e.PropertyName is nameof(TelemetrySelectionViewModel.SelectedPointIndex))
             RaisePropertyChanged(nameof(SelectedPointIndex));
+
+        if (e.PropertyName is nameof(TelemetrySelectionViewModel.SelectedPoint)
+            or nameof(TelemetrySelectionViewModel.SelectedPointIndex))
+        {
+            RaisePropertyChanged(nameof(SelectedPointLatitude));
+            RaisePropertyChanged(nameof(SelectedPointLongitude));
+        }
     }
 
     private void UpdateRouteJson()

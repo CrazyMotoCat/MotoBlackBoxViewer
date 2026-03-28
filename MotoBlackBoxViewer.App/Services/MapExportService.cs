@@ -9,6 +9,8 @@ namespace MotoBlackBoxViewer.App.Services;
 
 public sealed class MapExportService : IMapExportService
 {
+    private const int MaxRuntimeRoutePointCount = 5000;
+
     public string GetTemplatePath()
     {
         return Path.Combine(AppContext.BaseDirectory, "Assets", "Map", "index.html");
@@ -16,7 +18,9 @@ public sealed class MapExportService : IMapExportService
 
     public string BuildRouteJson(IReadOnlyList<TelemetryPoint> points)
     {
-        return JsonSerializer.Serialize(points.Select(p => new
+        IReadOnlyList<TelemetryPoint> routePoints = MapRouteSimplifier.Simplify(points, MaxRuntimeRoutePointCount);
+
+        return JsonSerializer.Serialize(routePoints.Select(p => new
         {
             index = p.Index,
             lat = p.Latitude,

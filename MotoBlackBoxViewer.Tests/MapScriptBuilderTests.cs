@@ -30,9 +30,9 @@ public sealed class MapScriptBuilderTests
     }
 
     [Fact]
-    public void BuildSetSelectedIndexScript_HandlesNullAndValue()
+    public void BuildSetSelectedPointScript_HandlesNullAndCoordinates()
     {
-        Assert.Equal("window.setSelectedIndex(null);", MapScriptBuilder.BuildSetSelectedIndexScript(null));
-        Assert.Equal("window.setSelectedIndex(42);", MapScriptBuilder.BuildSetSelectedIndexScript(42));
+        Assert.Equal("window.setSelectedPoint(null, null, false, false);", MapScriptBuilder.BuildSetSelectedPointScript(null, null, false, false));
+        Assert.Equal("window.setSelectedPoint(43.123456, 131.654321, true, false);", MapScriptBuilder.BuildSetSelectedPointScript(43.123456, 131.654321, true, false));
     }
 }

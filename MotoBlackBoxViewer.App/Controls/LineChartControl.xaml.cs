@@ -38,6 +38,12 @@ public partial class LineChartControl : UserControl
         typeof(LineChartControl),
         new PropertyMetadata("#38BDF8", OnChartPropertyChanged));
 
+    public static readonly DependencyProperty WindowRadiusProperty = DependencyProperty.Register(
+        nameof(WindowRadius),
+        typeof(int),
+        typeof(LineChartControl),
+        new PropertyMetadata(0, OnChartPropertyChanged));
+
     public LineChartControl()
     {
         InitializeComponent();
@@ -73,6 +79,12 @@ public partial class LineChartControl : UserControl
         set => SetValue(LineColorHexProperty, value);
     }
 
+    public int WindowRadius
+    {
+        get => (int)GetValue(WindowRadiusProperty);
+        set => SetValue(WindowRadiusProperty, value);
+    }
+
     private static void OnChartPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         => ((LineChartControl)d).ScheduleRedraw();
 
@@ -94,6 +106,7 @@ public partial class LineChartControl : UserControl
     private void Redraw()
     {
         var values = Values ?? Array.Empty<double>();
-        ChartRenderHelper.DrawSingleSeries(ChartCanvas, values, Unit, SelectedIndex, LineColorHex, SeriesLabel);
+        (IReadOnlyList<double> windowedValues, int? windowedSelectedIndex) = ChartViewportHelper.SliceValues(values, SelectedIndex, WindowRadius);
+        ChartRenderHelper.DrawSingleSeries(ChartCanvas, windowedValues, Unit, windowedSelectedIndex, LineColorHex, SeriesLabel);
     }
 }

@@ -29,8 +29,9 @@
 * связанная подсветка выбранной точки в таблице, на графиках и на карте
 * ползунок воспроизведения маршрута
 * пошаговое перемещение и autoplay точек
-* выбор скорости воспроизведения: `0.25x / 0.5x / 1x / 2x / 4x`
+* выбор скорости воспроизведения: `0.25x / 0.5x / 1x / 2x / 4x / 8x / 16x`
 * фильтр диапазона точек с обновлением карты, графиков, таблицы и статистики
+* режим окна графика вокруг текущей точки: `500 / 1000 / 5000` до и после либо весь диапазон
 * корректный расчёт дистанции для выбранного диапазона
   ⚠️ Review note: расчёт всё ещё не фильтрует GPS outliers.
 * экспорт маршрута в HTML-карту и открытие во внешнем браузере
@@ -52,6 +53,11 @@
   * `TelemetryWorkspacePersistenceService` держит deduped save / flush session logic
   * `TelemetryWorkspaceLoadService` держит CSV load scenario
   * `TelemetryWorkspaceSessionRestoreService` держит last-session restore scenario
+  * `TelemetryWorkspaceInteractionService` держит clear/reset/playback/map-open и reactive property-change flows
+* runtime-карта теперь дополнительно облегчает большие маршруты через route downsampling перед передачей в WebView2, а selected marker ставится по реальным координатам выбранной точки.
+* runtime-карта теперь различает два режима слежения:
+  * `Playback`: карта следует за текущей точкой
+  * ручной scrub по slider: marker двигается сразу, а центрирование откладывается до завершения drag
 * `TelemetrySelectionViewModel` теперь реагирует на реальные изменения visible data (`VisibleDataVersion`), а не на промежуточный `FilterSummary`, что уменьшает лишние selection/property-change эхо.
 * `CsvTelemetryReader` теперь устойчивее к вариантам русских accel-заголовков (`по X` / `поY` family после normalize).
 * solution переведён на `.NET 10` (`net10.0` / `net10.0-windows`) и зафиксирован через `global.json` на SDK `10.0.201`.
@@ -77,6 +83,11 @@
   * playback strip сильнее центрирован вокруг slider, а speed/meta стали вторичнее
   * chart tabs получили info-rows над графиками, а statistics tab теперь заполнен не только верхним metric grid
   * session summary / status bar стали более product-like: filename сильнее, metadata слабее, статусы менее debug-oriented
+  * из карты убраны дублирующие summary overlays:
+    * selected-point card больше не дублируется поверх маршрута
+    * `Маршрут загружен...` скрывается после успешной загрузки route
+    * file/range summary больше не дублируется в верхней toolbar card и нижней status bar
+  * helper card рядом с картой теперь содержит более user-friendly guidance вместо placeholder-copy
 * app-layer test safety net тоже расширен:
   * restore missing-file path
   * reset / clear persistence contracts
@@ -164,6 +175,8 @@ TODO:
 * runtime WebView2 sync тоже уже не шлёт raw JSON напрямую, но всё ещё требует дальнейшей оптимизации по payload size и long-route responsiveness
 * `MapViewControl` уже кеширует применённое состояние и coalesced async updates, чтобы не слать одинаковые обновления повторно
 * embedded map runtime теперь использует local `https` host mapping вместо `file://` navigation, чтобы не упираться в OSM tile blocking из-за missing `Referer`
+* следующий архитектурный шаг по карте:
+  * локальный tile cache / proxy для OpenStreetMap, чтобы большие сессии меньше зависели от повторной сетевой догрузки тайлов и быстрее переживали aggressive pan / scrub сценарии
 
 TODO:
 
@@ -368,3 +381,29 @@ CI:
 Главный фокус:
 
 👉 **устойчивость данных + контроль сложности orchestration + подготовка к большим логам**
+
+---
+
+## Быстрый Контекст Для Следующего Чата
+
+Если нужно быстро продолжить работу в новом чате:
+
+* `main` уже запушен в `origin`
+* solution уже на `.NET 10`, `global.json` закреплён на `10.0.201`
+* OSM runtime issue с `file://` уже обойдена через local `https` host mapping WebView2
+* map tile requests уже проверялись через netlog и шли с корректным `Referer`
+* UI baseline уже заметно дочищен:
+  * unified selected accent across grid/chart/playback
+  * calmer table + left accent rail
+  * point details вынесены в отдельный блок ниже карты
+  * дублирующие map/file summaries убраны
+* app-layer tests сейчас зелёные: `47 / 47`
+* coordinator уже начал дробиться на:
+  * `TelemetryWorkspaceSynchronizationService`
+  * `TelemetryWorkspacePersistenceService`
+  * `TelemetryWorkspaceLoadService`
+  * `TelemetryWorkspaceSessionRestoreService`
+
+Стартовая фраза для нового чата:
+
+`Продолжаем в D:\Codex\MotoBlackBoxViewer_upstream. Прочитай README.md и ROADMAP.md. main уже запушен, UI cleanup по карте и summary duplication уже сделан, coordinator частично разрезан на helper services, тесты сейчас 36/36. Дальше хочу либо добить app-layer tests под новые scenario services, либо продолжить дробление TelemetryWorkspaceCoordinator.`

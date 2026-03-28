@@ -12,11 +12,15 @@ internal static class MapScriptBuilder
 
     public static string BuildClearRouteDataScript() => "window.clearRouteData();";
 
-    public static string BuildSetSelectedIndexScript(int? selectedPointIndex)
+    public static string BuildSetSelectedPointScript(
+        double? latitude,
+        double? longitude,
+        bool isPlaybackRunning,
+        bool isManualScrubbing)
     {
-        return selectedPointIndex.HasValue
-            ? $"window.setSelectedIndex({selectedPointIndex.Value});"
-            : "window.setSelectedIndex(null);";
+        return latitude.HasValue && longitude.HasValue
+            ? $"window.setSelectedPoint({latitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}, {longitude.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)}, {isPlaybackRunning.ToString().ToLowerInvariant()}, {isManualScrubbing.ToString().ToLowerInvariant()});"
+            : $"window.setSelectedPoint(null, null, {isPlaybackRunning.ToString().ToLowerInvariant()}, {isManualScrubbing.ToString().ToLowerInvariant()});";
     }
 
     public static string BuildBootstrapScript(string routeJson)

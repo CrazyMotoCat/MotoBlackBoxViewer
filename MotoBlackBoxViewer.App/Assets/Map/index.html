@@ -31,31 +31,30 @@
     #status.hidden {
       display: none;
     }
-    #status .muted { color: #b89aa4; }
     .leaflet-control-attribution { font-size: 11px; }
   </style>
 </head>
-  <body>
+<body>
   <div id="map"></div>
-  <div id="status" class="panel">Карта готова. Загрузите CSV в приложении.</div>
+  <div id="status" class="panel">Map is ready. Load a CSV in the app.</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
           integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
     let map;
     let routeData = [];
-    let routeDataByIndex = new Map();
     let routeLine = null;
     let startMarker = null;
     let finishMarker = null;
     let selectedMarker = null;
-    let lastPanAt = 0;
+    let pendingPanTarget = null;
+    let pendingPanTimer = null;
 
     const statusEl = document.getElementById('status');
 
     function setStatus(text) {
       statusEl.classList.remove('hidden');
-      statusEl.innerHTML = text;
+      statusEl.textContent = text;
     }
 
     function hideStatus() {
@@ -64,7 +63,7 @@
 
     function initMap() {
       if (!window.L) {
-        setStatus('Не удалось загрузить Leaflet/OpenStreetMap. Проверьте подключение к интернету.');
+        setStatus('Failed to load Leaflet/OpenStreetMap. Check your internet connection.');
         return;
       }
 
@@ -75,13 +74,16 @@
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors'
+        attribution: '&copy; OpenStreetMap contributors',
+        keepBuffer: 10,
+        updateWhenIdle: true,
+        updateWhenZooming: false
       }).addTo(map);
 
       if (Array.isArray(routeData) && routeData.length > 0) {
         setRouteData(routeData);
       } else {
-        setStatus('Карта готова. Загрузите CSV в приложении.');
+        setStatus('Map is ready. Load a CSV in the app.');
       }
     }
 
@@ -98,17 +100,16 @@
 
     function setRouteData(points) {
       routeData = Array.isArray(points) ? points : [];
-      routeDataByIndex = new Map(routeData.map(point => [Number(point.index), point]));
 
       if (!map) return;
       clearMapObjects();
 
       if (!routeData.length) {
-        setStatus('Маршрут пуст. Откройте CSV-файл.');
+        setStatus('Route is empty. Load a CSV file.');
         return;
       }
 
-      const latLngs = routeData.map(p => [p.lat, p.lon]);
+      const latLngs = routeData.map(point => [point.lat, point.lon]);
       routeLine = L.polyline(latLngs, {
         color: '#d45c6b',
         weight: 5,
@@ -124,7 +125,7 @@
         weight: 2,
         fillColor: '#22c55e',
         fillOpacity: 0.9
-      }).addTo(map).bindTooltip('Старт');
+      }).addTo(map).bindTooltip('Start');
 
       finishMarker = L.circleMarker([last.lat, last.lon], {
         radius: 7,
@@ -132,18 +133,18 @@
         weight: 2,
         fillColor: '#ef4444',
         fillOpacity: 0.9
-      }).addTo(map).bindTooltip('Финиш');
+      }).addTo(map).bindTooltip('Finish');
 
       map.fitBounds(routeLine.getBounds(), { padding: [28, 28] });
       hideStatus();
     }
 
-    function setSelectedIndex(index) {
+    function setSelectedPoint(lat, lon, isPlaybackRunning, isManualScrubbing) {
       if (!map) {
         return;
       }
 
-      if (index === null || index === undefined) {
+      if (lat === null || lat === undefined || lon === null || lon === undefined) {
         if (selectedMarker) {
           map.removeLayer(selectedMarker);
           selectedMarker = null;
@@ -151,13 +152,8 @@
         return;
       }
 
-      const point = routeDataByIndex.get(Number(index));
-      if (!point) {
-        return;
-      }
-
       if (!selectedMarker) {
-        selectedMarker = L.circleMarker([point.lat, point.lon], {
+        selectedMarker = L.circleMarker([lat, lon], {
           radius: 9,
           color: '#f08a5d',
           weight: 3,
@@ -165,27 +161,67 @@
           fillOpacity: 0.9
         }).addTo(map);
       } else {
-        selectedMarker.setLatLng([point.lat, point.lon]);
+        selectedMarker.setLatLng([lat, lon]);
       }
 
-      const now = Date.now();
-      const shouldAnimatePan = now - lastPanAt >= 250;
-      map.panTo([point.lat, point.lon], {
-        animate: shouldAnimatePan,
-        duration: shouldAnimatePan ? 0.25 : 0
-      });
-      lastPanAt = now;
+      schedulePanToSelectedPoint(lat, lon, isPlaybackRunning === true, isManualScrubbing === true);
+    }
+
+    function schedulePanToSelectedPoint(lat, lon, isPlaybackRunning, isManualScrubbing) {
+      if (!map) {
+        return;
+      }
+
+      const target = L.latLng(lat, lon);
+      const currentBounds = map.getBounds();
+      const safeVisibleBounds = currentBounds.pad(-0.08);
+      const centeredBounds = currentBounds.pad(-0.35);
+
+      if (safeVisibleBounds.isValid() && !safeVisibleBounds.contains(target)) {
+        map.panInside(target, {
+          paddingTopLeft: [96, 96],
+          paddingBottomRight: [96, 96],
+          animate: false
+        });
+      }
+
+      if (pendingPanTimer) {
+        clearTimeout(pendingPanTimer);
+        pendingPanTimer = null;
+      }
+
+      pendingPanTarget = target;
+
+      if (isManualScrubbing) {
+        return;
+      }
+
+      if (centeredBounds.isValid() && centeredBounds.contains(target) && !isPlaybackRunning) {
+        return;
+      }
+
+      const delay = isPlaybackRunning ? 70 : 100;
+      pendingPanTimer = setTimeout(() => {
+        pendingPanTimer = null;
+        if (!pendingPanTarget || !map) {
+          return;
+        }
+
+        map.panTo(pendingPanTarget, {
+          animate: false
+        });
+        pendingPanTarget = null;
+      }, delay);
     }
 
     function clearRouteData() {
       routeData = [];
-      routeDataByIndex = new Map();
       clearMapObjects();
-      setStatus('Маршрут очищен. Загрузите CSV в приложении.');
+      setStatus('Route is cleared. Load a CSV in the app.');
     }
 
     window.setRouteData = setRouteData;
-    window.setSelectedIndex = setSelectedIndex;
+    window.setSelectedPoint = setSelectedPoint;
     window.clearRouteData = clearRouteData;
 
     /*__ROUTE_BOOTSTRAP__*/

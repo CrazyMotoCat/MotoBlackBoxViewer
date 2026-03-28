@@ -1,8 +1,6 @@
-using System.IO;
 using MotoBlackBoxViewer.App.Interfaces;
 using MotoBlackBoxViewer.App.Models;
 using MotoBlackBoxViewer.App.ViewModels;
-using MotoBlackBoxViewer.Core.Models;
 
 namespace MotoBlackBoxViewer.App.Services;
 
@@ -10,12 +8,11 @@ internal sealed class TelemetryWorkspaceCoordinator
 {
     private readonly TelemetryDataViewModel _data;
     private readonly TelemetryPlaybackViewModel _playback;
-    private readonly TelemetryMapViewModel _map;
     private readonly TelemetrySessionState _state;
-    private readonly TelemetryWorkspaceSynchronizationService _synchronization;
     private readonly TelemetryWorkspacePersistenceService _persistence;
     private readonly TelemetryWorkspaceLoadService _load;
     private readonly TelemetryWorkspaceSessionRestoreService _sessionRestore;
+    private readonly TelemetryWorkspaceInteractionService _interaction;
     private int _suppressionDepth;
 
     public TelemetryWorkspaceCoordinator(
@@ -28,23 +25,26 @@ internal sealed class TelemetryWorkspaceCoordinator
     {
         _data = data;
         _playback = playback;
-        _map = map;
         _state = state;
-        _synchronization = new TelemetryWorkspaceSynchronizationService(data, selection, map, state);
+
+        TelemetryWorkspaceSynchronizationService synchronization = new(data, selection, map, state);
         _persistence = new TelemetryWorkspacePersistenceService(sessionPersistenceCoordinator);
-        _load = new TelemetryWorkspaceLoadService(data, _synchronization);
-        _sessionRestore = new TelemetryWorkspaceSessionRestoreService(data, playback, _synchronization);
+        _load = new TelemetryWorkspaceLoadService(data, synchronization);
+        _sessionRestore = new TelemetryWorkspaceSessionRestoreService(data, playback, synchronization);
+        _interaction = new TelemetryWorkspaceInteractionService(
+            data,
+            playback,
+            map,
+            state,
+            synchronization,
+            _persistence,
+            EnterSuppression,
+            () => IsReactiveHandlingSuppressed);
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         AppSessionSettings session = _persistence.Load();
-
-        if (!File.Exists(session.LastFilePath))
-        {
-            _data.StatusText = $"Не удалось восстановить прошлую сессию: файл {Path.GetFileName(session.LastFilePath)} не найден.";
-            return;
-        }
 
         try
         {
@@ -61,7 +61,7 @@ internal sealed class TelemetryWorkspaceCoordinator
         }
         catch (Exception ex)
         {
-            _data.StatusText = $"Не удалось восстановить прошлую сессию: {ex.Message}";
+            _data.StatusText = $"\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0432\u043e\u0441\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c \u043f\u0440\u043e\u0448\u043b\u0443\u044e \u0441\u0435\u0441\u0441\u0438\u044e: {ex.Message}";
         }
         finally
         {
@@ -73,7 +73,7 @@ internal sealed class TelemetryWorkspaceCoordinator
 
     public async Task LoadCsvAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        _data.StatusText = "Открываем CSV...";
+        _data.StatusText = "\u041e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u043c CSV...";
 
         using IDisposable _ = EnterSuppression();
 
@@ -84,112 +84,31 @@ internal sealed class TelemetryWorkspaceCoordinator
         }
         catch (OperationCanceledException)
         {
-            _data.StatusText = "Загрузка CSV отменена.";
+            _data.StatusText = "\u0417\u0430\u0433\u0440\u0443\u0437\u043a\u0430 CSV \u043e\u0442\u043c\u0435\u043d\u0435\u043d\u0430.";
             throw;
         }
         catch (Exception ex)
         {
-            _data.StatusText = $"Не удалось открыть CSV: {ex.Message}";
+            _data.StatusText = $"\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0442\u043a\u0440\u044b\u0442\u044c CSV: {ex.Message}";
             throw;
         }
     }
 
-    public void Clear()
-    {
-        StopPlayback(updateStatus: false);
+    public void Clear() => _interaction.Clear();
 
-        using IDisposable _ = EnterSuppression();
-        _synchronization.ClearWorkspace();
-        _data.StatusText = "Сессия очищена.";
-        PersistSession(includeSelectedPosition: false);
-    }
+    public void ResetFilter() => _interaction.ResetFilter();
 
-    public void ResetFilter()
-    {
-        if (!_data.HasSourceData)
-            return;
+    public void OpenMapInBrowser() => _interaction.OpenMapInBrowser();
 
-        StopPlayback(updateStatus: false);
+    public void TogglePlayback() => _interaction.TogglePlayback();
 
-        using IDisposable _ = EnterSuppression();
-        _data.ResetFilterRange();
+    public void StopPlayback(bool updateStatus = true) => _interaction.StopPlayback(updateStatus);
 
-        ApplyFilterAndSynchronize(updateStatus: true);
-    }
+    public void HandleDataPropertyChanged(string? propertyName) => _interaction.HandleDataPropertyChanged(propertyName);
 
-    public void OpenMapInBrowser()
-    {
-        string htmlPath = _map.ExportMapHtml();
-        _map.OpenInBrowser(htmlPath);
-        _data.StatusText = $"Карта открыта в браузере: {Path.GetFileName(htmlPath)}.";
-    }
+    public void HandleSelectionPropertyChanged(string? propertyName) => _interaction.HandleSelectionPropertyChanged(propertyName);
 
-    public void TogglePlayback()
-    {
-        if (!_data.HasPoints)
-            return;
-
-        if (_playback.IsPlaybackRunning)
-        {
-            StopPlayback();
-            return;
-        }
-
-        if (_playback.Start())
-            _data.StatusText = $"Воспроизведение запущено · {_playback.SelectedPlaybackSpeed.Label}.";
-    }
-
-    public void StopPlayback(bool updateStatus = true)
-    {
-        bool stopped = _playback.Stop();
-        if (updateStatus && stopped)
-            _data.StatusText = "Воспроизведение остановлено.";
-    }
-
-    public void HandleDataPropertyChanged(string? propertyName)
-    {
-        if (_state.IsRestoringSession || IsReactiveHandlingSuppressed)
-            return;
-
-        if (propertyName is nameof(TelemetryDataViewModel.FilterStartIndex) or nameof(TelemetryDataViewModel.FilterEndIndex))
-        {
-            StopPlayback(updateStatus: false);
-            ApplyFilterAndSynchronize(updateStatus: true);
-        }
-    }
-
-    public void HandleSelectionPropertyChanged(string? propertyName)
-    {
-        if (_state.IsRestoringSession || IsReactiveHandlingSuppressed)
-            return;
-
-        if (propertyName is nameof(TelemetrySelectionViewModel.SelectedPoint)
-            or nameof(TelemetrySelectionViewModel.PlaybackPosition))
-        {
-            PersistSession(includeSelectedPosition: true);
-        }
-    }
-
-    public void HandlePlaybackPropertyChanged(string? propertyName)
-    {
-        if (_state.IsRestoringSession || IsReactiveHandlingSuppressed)
-            return;
-
-        if (propertyName is not nameof(TelemetryPlaybackViewModel.SelectedPlaybackSpeed))
-            return;
-
-        PersistSession(includeSelectedPosition: false);
-
-        if (_playback.IsPlaybackRunning)
-            _data.StatusText = $"Скорость воспроизведения: {_playback.SelectedPlaybackSpeed.Label}.";
-    }
-
-    private void ApplyFilterAndSynchronize(bool updateStatus)
-    {
-        using IDisposable _ = EnterSuppression();
-        _synchronization.SynchronizeAfterLoad(updateStatus);
-        PersistSession(includeSelectedPosition: false);
-    }
+    public void HandlePlaybackPropertyChanged(string? propertyName) => _interaction.HandlePlaybackPropertyChanged(propertyName);
 
     private void PersistSession(bool includeSelectedPosition)
         => _persistence.Save(_state, _playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
@@ -223,5 +142,4 @@ internal sealed class TelemetryWorkspaceCoordinator
             _owner = null;
         }
     }
-
 }

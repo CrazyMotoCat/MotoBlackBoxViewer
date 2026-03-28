@@ -16,6 +16,8 @@ public partial class MapViewControl : UserControl
     private string _appliedRouteJson = string.Empty;
     private int _appliedRefreshVersion = -1;
     private int? _appliedSelectedPointIndex;
+    private bool _appliedPlaybackRunning;
+    private bool _appliedManualScrubbing;
     private bool _routeSyncPending;
     private bool _selectionSyncPending;
     private bool _isSyncLoopRunning;
@@ -32,11 +34,35 @@ public partial class MapViewControl : UserControl
         typeof(MapViewControl),
         new PropertyMetadata(null, OnSelectedPointIndexChanged));
 
+    public static readonly DependencyProperty SelectedPointLatitudeProperty = DependencyProperty.Register(
+        nameof(SelectedPointLatitude),
+        typeof(double?),
+        typeof(MapViewControl),
+        new PropertyMetadata(null, OnSelectedPointLocationChanged));
+
+    public static readonly DependencyProperty SelectedPointLongitudeProperty = DependencyProperty.Register(
+        nameof(SelectedPointLongitude),
+        typeof(double?),
+        typeof(MapViewControl),
+        new PropertyMetadata(null, OnSelectedPointLocationChanged));
+
     public static readonly DependencyProperty RefreshVersionProperty = DependencyProperty.Register(
         nameof(RefreshVersion),
         typeof(int),
         typeof(MapViewControl),
         new PropertyMetadata(0, OnRouteStateChanged));
+
+    public static readonly DependencyProperty IsPlaybackRunningProperty = DependencyProperty.Register(
+        nameof(IsPlaybackRunning),
+        typeof(bool),
+        typeof(MapViewControl),
+        new PropertyMetadata(false, OnInteractionStateChanged));
+
+    public static readonly DependencyProperty IsManualScrubbingProperty = DependencyProperty.Register(
+        nameof(IsManualScrubbing),
+        typeof(bool),
+        typeof(MapViewControl),
+        new PropertyMetadata(false, OnInteractionStateChanged));
 
     public MapViewControl()
     {
@@ -56,10 +82,34 @@ public partial class MapViewControl : UserControl
         set => SetValue(SelectedPointIndexProperty, value);
     }
 
+    public double? SelectedPointLatitude
+    {
+        get => (double?)GetValue(SelectedPointLatitudeProperty);
+        set => SetValue(SelectedPointLatitudeProperty, value);
+    }
+
+    public double? SelectedPointLongitude
+    {
+        get => (double?)GetValue(SelectedPointLongitudeProperty);
+        set => SetValue(SelectedPointLongitudeProperty, value);
+    }
+
     public int RefreshVersion
     {
         get => (int)GetValue(RefreshVersionProperty);
         set => SetValue(RefreshVersionProperty, value);
+    }
+
+    public bool IsPlaybackRunning
+    {
+        get => (bool)GetValue(IsPlaybackRunningProperty);
+        set => SetValue(IsPlaybackRunningProperty, value);
+    }
+
+    public bool IsManualScrubbing
+    {
+        get => (bool)GetValue(IsManualScrubbingProperty);
+        set => SetValue(IsManualScrubbingProperty, value);
     }
 
     private async void MapViewControl_Loaded(object sender, RoutedEventArgs e)
@@ -76,6 +126,16 @@ public partial class MapViewControl : UserControl
     }
 
     private static void OnSelectedPointIndexChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        ((MapViewControl)d).ScheduleSync(includeRoute: false, includeSelection: true);
+    }
+
+    private static void OnSelectedPointLocationChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        ((MapViewControl)d).ScheduleSync(includeRoute: false, includeSelection: true);
+    }
+
+    private static void OnInteractionStateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
         ((MapViewControl)d).ScheduleSync(includeRoute: false, includeSelection: true);
     }
@@ -110,6 +170,8 @@ public partial class MapViewControl : UserControl
             _appliedRouteJson = string.Empty;
             _appliedRefreshVersion = -1;
             _appliedSelectedPointIndex = null;
+            _appliedPlaybackRunning = false;
+            _appliedManualScrubbing = false;
             await RunAndTraceAsync(() => SyncRouteStateAsync(force: true));
             await RunAndTraceAsync(() => SyncSelectedPointAsync(force: true));
         }
@@ -206,10 +268,19 @@ public partial class MapViewControl : UserControl
         if (!_isMapReady || MapWebView.CoreWebView2 is null)
             return;
 
-        if (!force && _appliedSelectedPointIndex == SelectedPointIndex)
+        bool interactionStateChanged = _appliedPlaybackRunning != IsPlaybackRunning
+            || _appliedManualScrubbing != IsManualScrubbing;
+
+        if (!force && _appliedSelectedPointIndex == SelectedPointIndex && !interactionStateChanged)
             return;
 
-        await MapWebView.ExecuteScriptAsync(MapScriptBuilder.BuildSetSelectedIndexScript(SelectedPointIndex));
+        await MapWebView.ExecuteScriptAsync(MapScriptBuilder.BuildSetSelectedPointScript(
+            SelectedPointLatitude,
+            SelectedPointLongitude,
+            IsPlaybackRunning,
+            IsManualScrubbing));
         _appliedSelectedPointIndex = SelectedPointIndex;
+        _appliedPlaybackRunning = IsPlaybackRunning;
+        _appliedManualScrubbing = IsManualScrubbing;
     }
 }

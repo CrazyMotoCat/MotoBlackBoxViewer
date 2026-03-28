@@ -63,6 +63,26 @@
                 <Button Style="{StaticResource ToolbarButtonStyle}"
                         Content="Очистить"
                         Command="{Binding ClearCommand}" />
+                <Border Width="1"
+                        Height="18"
+                        Background="{StaticResource BorderBrushTheme}"
+                        Margin="8,7,8,7" />
+                <TextBlock Text="Окно графика"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           VerticalAlignment="Center"
+                           Margin="0,0,8,0" />
+                <ComboBox Width="190"
+                          Height="28"
+                          VerticalAlignment="Center"
+                          ItemsSource="{Binding Workspace.Data.ChartWindowOptions}"
+                          SelectedItem="{Binding Workspace.Data.SelectedChartWindow, Mode=TwoWay}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Label}"
+                                       Foreground="{StaticResource TextBrushTheme}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
             </WrapPanel>
         </Border>
 
@@ -95,6 +115,10 @@
                     <controls:MapViewControl Grid.Row="1"
                                              RouteJson="{Binding Workspace.Map.RouteJson}"
                                              SelectedPointIndex="{Binding Workspace.Selection.SelectedPointIndex}"
+                                             SelectedPointLatitude="{Binding Workspace.Map.SelectedPointLatitude}"
+                                             SelectedPointLongitude="{Binding Workspace.Map.SelectedPointLongitude}"
+                                             IsPlaybackRunning="{Binding Workspace.Playback.IsPlaybackRunning}"
+                                             IsManualScrubbing="{Binding Workspace.Map.IsManualScrubbing}"
                                              RefreshVersion="{Binding Workspace.Map.RefreshVersion}" />
 
                     <StackPanel Grid.Row="2" Margin="0,12,0,0">
@@ -163,6 +187,9 @@
                                         Minimum="{Binding Workspace.Selection.PlaybackMinimum}"
                                         Maximum="{Binding Workspace.Selection.PlaybackMaximum}"
                                         Value="{Binding Workspace.Selection.PlaybackPosition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        PreviewMouseLeftButtonDown="PlaybackSlider_PreviewMouseLeftButtonDown"
+                                        PreviewMouseLeftButtonUp="PlaybackSlider_PreviewMouseLeftButtonUp"
+                                        LostMouseCapture="PlaybackSlider_LostMouseCapture"
                                         IsEnabled="{Binding Workspace.Data.HasPoints}"
                                         IsSnapToTickEnabled="True"
                                         TickFrequency="1"
@@ -544,6 +571,7 @@
                             <Border Style="{StaticResource ChartCardStyle}">
                                 <controls:LineChartControl Values="{Binding Workspace.Data.SpeedSeries}"
                                                            SelectedIndex="{Binding Workspace.Selection.PlaybackPosition}"
+                                                           WindowRadius="{Binding Workspace.Data.ChartWindowRadius}"
                                                            Unit="км/ч"
                                                            SeriesLabel="Скорость"
                                                            LineColorHex="#C65A69" />
@@ -588,6 +616,7 @@
                             <Border Style="{StaticResource ChartCardStyle}">
                                 <controls:LineChartControl Values="{Binding Workspace.Data.LeanSeries}"
                                                            SelectedIndex="{Binding Workspace.Selection.PlaybackPosition}"
+                                                           WindowRadius="{Binding Workspace.Data.ChartWindowRadius}"
                                                            Unit="°"
                                                            SeriesLabel="Наклон"
                                                            LineColorHex="#9E5662" />
@@ -637,6 +666,7 @@
                             <Border Style="{StaticResource ChartCardStyle}">
                                 <controls:MultiLineChartControl Series="{Binding Workspace.Data.AccelSeries}"
                                                                 SelectedIndex="{Binding Workspace.Selection.PlaybackPosition}"
+                                                                WindowRadius="{Binding Workspace.Data.ChartWindowRadius}"
                                                                 Unit="ед." />
                             </Border>
                         </StackPanel>

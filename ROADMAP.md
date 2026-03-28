@@ -35,8 +35,17 @@ The app already supports:
 * route display on embedded map via WebView2
 * linked selection between table, charts, and map
 * playback controls with multiple speed presets
+  Review note: presets now extend through `8x` and `16x` for faster route scrubbing.
 * point range filtering
+* chart viewport mode around the current point:
+  * `500` before / `500` after
+  * `1000` before / `1000` after
+  * `5000` before / `5000` after
+  * full visible range
 * route export to HTML map
+* embedded map follow behavior now separates:
+  * `Playback`: map follows the selected point
+  * manual scrub: marker updates immediately, map recenters after drag settles
   ⚠️ Review note: export and runtime route sync already use a safer JSON-string
   bridge, but long-route payload cost is still an open performance topic.
 * session restore for last file, filter, speed, and playback position
@@ -101,6 +110,9 @@ Key areas:
   Small app-layer service for CSV loading scenario orchestration.
 * `Services/TelemetryWorkspaceSessionRestoreService.cs`
   Small app-layer service for last-session restore orchestration.
+* `Services/TelemetryWorkspaceInteractionService.cs`
+  Small app-layer service for clear/reset/playback/map-open and reactive
+  workspace event flows.
 
 Supporting services and abstractions already exist for:
 
@@ -138,8 +150,11 @@ Current automated coverage focuses on the most stable logic:
 * map script escaping
 * async command reentrancy/error recovery
 
-At the time of writing there are 36 unit tests across 8 test files, and
+At the time of writing there are 44 unit tests across 10 test files, and
 `dotnet test MotoBlackBoxViewer.sln` is green locally on `.NET 10`.
+Additional note: the current checked baseline is `47 / 47` green via
+`dotnet test MotoBlackBoxViewer.Tests\MotoBlackBoxViewer.Tests.csproj /p:UseAppHost=false`
+when the desktop app binary is already running and locks the normal app output.
 
 ⚠️ Review note:
 Missing coverage for:
@@ -179,6 +194,14 @@ The codebase is in a good intermediate state:
   * `TelemetryWorkspacePersistenceService`
   * `TelemetryWorkspaceLoadService`
   * `TelemetryWorkspaceSessionRestoreService`
+  * `TelemetryWorkspaceInteractionService`
+* chart rendering now supports a focused viewport around the selected point,
+  which keeps redraw cost bounded on large logs.
+* runtime map payloads are now downsampled before being sent into WebView2,
+  while selected-point sync uses live coordinates instead of relying on the
+  route payload to contain every original index.
+* map follow behavior is now mode-aware, so playback and manual slider scrub do
+  not force the same recentering strategy.
 * `TelemetrySelectionViewModel` now refreshes derived selection state from
   actual visible-data changes instead of intermediate filter-summary churn
 * CSV loading now handles quoted values and stricter encoding fallback
@@ -190,6 +213,9 @@ The codebase is in a good intermediate state:
 * the embedded map now navigates via a local `https` WebView2 host mapping
   instead of `file://`, which keeps runtime tile loading compatible with the
   current OpenStreetMap tile policy requiring a valid `Referer`
+* the next architectural map step should be a local OpenStreetMap tile
+  cache/proxy layer so tile reuse survives fast scrubbing and repeated sessions
+  instead of depending only on network-backed WebView tile fetches
 * tests cover core parsing, analytics, session persistence, and a growing part
   of the app-layer behavior, including workspace-level guardrails against
   duplicate session persistence during internal synchronization
@@ -283,6 +309,11 @@ Current pass status:
   * chart tabs now use explicit info rows above plots
   * statistics tab now fills the lower area with selected-point/session context
   * session summary and status bar copy are lighter and more product-like
+  * duplicated summaries have been removed from the map area:
+    * no duplicate selected-point info card on top of the map
+    * no persistent `route loaded` overlay after successful map load
+    * no duplicate file/range summary in the top toolbar area or bottom status bar
+  * the helper card near the map now uses more user-friendly guidance copy
 
 ## Highest-Value Hotspots
 
@@ -427,10 +458,14 @@ Suggested work:
 * consider saved report bundles for sharing a session
 * reduce route payload size or move to incremental map updates if long-route
   performance becomes visible
+* add a local tile cache/proxy for OSM requests to reduce black-tile / delayed
+  tile recovery during aggressive slider scrubbing and repeated map review
 
 Success signal:
 
 * map output is useful both inside the app and outside it
+* large logs no longer cause visible tile churn or repeated network-bound
+  redraw stalls during map navigation
 
 ### Phase 5: Polish Product UX
 
@@ -518,6 +553,13 @@ If you need to rehydrate context quickly in a future conversation:
 * The repository is already refactored away from a fat `MainWindow`.
 * The current architectural center is `TelemetryWorkspace` plus
   `TelemetryWorkspaceCoordinator`.
+* `origin/main` already contains:
+  * UI cleanup for map summary duplication
+  * coordinator helper-service split
+  * expanded app-layer test safety net
+* The current test baseline is `47 / 47` green on the test project run, and the
+  full solution run still requires the app binary not to be locked by a running
+  desktop instance.
 * The most likely next engineering task is to keep improving
   orchestration/testability and gradually split mixed state containers.
 * The most likely next product task is richer filtering and analysis, but only
