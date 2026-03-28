@@ -15,9 +15,9 @@ public sealed class CsvTelemetryReaderTests : IDisposable
                            "43,116934;131,895912;13,4;9,80;0,02;0,01;1,7\n";
 
         string filePath = CreateTempFile(csv, Encoding.UTF8);
-        var reader = new CsvTelemetryReader();
+        CsvTelemetryReader reader = new();
 
-        var points = await reader.ReadAsync(filePath);
+        IReadOnlyList<MotoBlackBoxViewer.Core.Models.TelemetryPoint> points = await reader.ReadAsync(filePath);
 
         Assert.Equal(2, points.Count);
         Assert.Equal(43.116877, points[0].Latitude, 6);
@@ -40,9 +40,9 @@ public sealed class CsvTelemetryReaderTests : IDisposable
                            "43.116988;131.895633;14.1;9.79;0.02;0.01;1.9\n";
 
         string filePath = CreateTempFile(csv, Encoding.GetEncoding(1251));
-        var reader = new CsvTelemetryReader();
+        CsvTelemetryReader reader = new();
 
-        var points = await reader.ReadAsync(filePath);
+        IReadOnlyList<MotoBlackBoxViewer.Core.Models.TelemetryPoint> points = await reader.ReadAsync(filePath);
 
         Assert.Equal(3, points.Count);
         Assert.Equal(0, points[0].DistanceFromStartMeters, 6);
@@ -57,14 +57,31 @@ public sealed class CsvTelemetryReaderTests : IDisposable
                            "43.116877;131.896234;12.8;9.81;0.03;0.02;1.5\n";
 
         string filePath = CreateTempFile(csv, Encoding.UTF8);
-        var reader = new CsvTelemetryReader();
+        CsvTelemetryReader reader = new();
 
-        var points = await reader.ReadAsync(filePath);
+        IReadOnlyList<MotoBlackBoxViewer.Core.Models.TelemetryPoint> points = await reader.ReadAsync(filePath);
 
-        var point = Assert.Single(points);
+        MotoBlackBoxViewer.Core.Models.TelemetryPoint point = Assert.Single(points);
         Assert.Equal(1, point.Index);
         Assert.Equal(12.8, point.SpeedKmh, 3);
         Assert.Equal(1.5, point.LeanAngleDeg, 3);
+    }
+
+    [Fact]
+    public async Task ReadAsync_SupportsQuotedFields()
+    {
+        const string csv = "\"lat\";\"lon\";\"speed\";\"accelZ\";\"accelX\";\"accelY\";\"lean\"\n" +
+                           "\"43.116877\";\"131.896234\";\"12,8\";\"9.81\";\"0.03\";\"0.02\";\"1.5\"\n";
+
+        string filePath = CreateTempFile(csv, Encoding.UTF8);
+        CsvTelemetryReader reader = new();
+
+        IReadOnlyList<MotoBlackBoxViewer.Core.Models.TelemetryPoint> points = await reader.ReadAsync(filePath);
+
+        MotoBlackBoxViewer.Core.Models.TelemetryPoint point = Assert.Single(points);
+        Assert.Equal(43.116877, point.Latitude, 6);
+        Assert.Equal(131.896234, point.Longitude, 6);
+        Assert.Equal(12.8, point.SpeedKmh, 3);
     }
 
     [Fact]
@@ -72,11 +89,11 @@ public sealed class CsvTelemetryReaderTests : IDisposable
     {
         const string csv = "Широта;Долгота;Скорость\n43.1;131.8;10\n";
         string filePath = CreateTempFile(csv, Encoding.UTF8);
-        var reader = new CsvTelemetryReader();
+        CsvTelemetryReader reader = new();
 
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => reader.ReadAsync(filePath));
+        InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => reader.ReadAsync(filePath));
 
-        Assert.Contains("Не найдена колонка", ex.Message);
+        Assert.Contains("Required column", ex.Message);
     }
 
     private string CreateTempFile(string content, Encoding encoding)
@@ -89,7 +106,7 @@ public sealed class CsvTelemetryReaderTests : IDisposable
 
     public void Dispose()
     {
-        foreach (var file in _tempFiles)
+        foreach (string file in _tempFiles)
         {
             try
             {

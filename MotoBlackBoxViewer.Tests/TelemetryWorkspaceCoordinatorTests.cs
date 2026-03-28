@@ -13,7 +13,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
     [Fact]
     public async Task LoadCsvAsync_LoadsVisibleDataRefreshesMapAndPersistsSession()
     {
-        using var context = CreateContext(new AppSessionSettings());
+        using TestContext context = CreateContext(new AppSessionSettings());
 
         await context.Coordinator.LoadCsvAsync("ride.csv");
 
@@ -28,16 +28,17 @@ public sealed class TelemetryWorkspaceCoordinatorTests
     [Fact]
     public async Task InitializeAsync_RestoresSessionFilterSelectionAndSpeed()
     {
+        string filePath = CreateExistingTempFile();
         var session = new AppSessionSettings
         {
-            LastFilePath = "restore.csv",
+            LastFilePath = filePath,
             FilterStartIndex = 2,
             FilterEndIndex = 3,
             SelectedPlaybackSpeedLabel = "2x",
             SelectedVisiblePosition = 2
         };
 
-        using var context = CreateContext(session);
+        using TestContext context = CreateContext(session);
 
         await context.Coordinator.InitializeAsync();
 
@@ -48,13 +49,15 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         Assert.Equal(2, context.Selection.PlaybackPosition);
         Assert.Equal(3, context.Selection.SelectedPoint?.Index);
         Assert.Equal(1, context.Map.RefreshVersion);
-        Assert.Contains("restore.csv", context.Data.StatusText);
+        Assert.Contains(Path.GetFileName(filePath), context.Data.StatusText);
+
+        File.Delete(filePath);
     }
 
     [Fact]
     public async Task ResetFilter_RestoresFullRangeAndStopsPlayback()
     {
-        using var context = CreateContext(new AppSessionSettings());
+        using TestContext context = CreateContext(new AppSessionSettings());
         await context.Coordinator.LoadCsvAsync("ride.csv");
         context.Data.FilterStartIndex = 2;
         context.Data.FilterEndIndex = 2;
@@ -73,7 +76,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
     [Fact]
     public async Task Clear_ClearsAllDataRefreshesMapAndPersists()
     {
-        using var context = CreateContext(new AppSessionSettings());
+        using TestContext context = CreateContext(new AppSessionSettings());
         await context.Coordinator.LoadCsvAsync("ride.csv");
 
         context.Coordinator.Clear();
@@ -82,29 +85,29 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         Assert.False(context.Data.HasSourceData);
         Assert.Equal(2, context.Map.RefreshVersion);
         Assert.Equal(0, context.Selection.PlaybackPosition);
-        Assert.Equal("Данные очищены.", context.Data.StatusText);
+        Assert.Equal("Data cleared.", context.Data.StatusText);
         Assert.Equal(2, context.SessionPersistenceCoordinator.SaveCalls.Count);
     }
 
     [Fact]
     public async Task TogglePlayback_StartsAndStopsPlaybackWithStatus()
     {
-        using var context = CreateContext(new AppSessionSettings());
+        using TestContext context = CreateContext(new AppSessionSettings());
         await context.Coordinator.LoadCsvAsync("ride.csv");
 
         context.Coordinator.TogglePlayback();
         Assert.True(context.Playback.IsPlaybackRunning);
-        Assert.Contains("запущено", context.Data.StatusText);
+        Assert.Contains("Playback started", context.Data.StatusText);
 
         context.Coordinator.TogglePlayback();
         Assert.False(context.Playback.IsPlaybackRunning);
-        Assert.Equal("Воспроизведение остановлено.", context.Data.StatusText);
+        Assert.Equal("Playback stopped.", context.Data.StatusText);
     }
 
     [Fact]
     public async Task HandlePlaybackPropertyChanged_PersistsSpeedAndUpdatesStatusWhileRunning()
     {
-        using var context = CreateContext(new AppSessionSettings());
+        using TestContext context = CreateContext(new AppSessionSettings());
         await context.Coordinator.LoadCsvAsync("ride.csv");
         context.Coordinator.TogglePlayback();
 
@@ -114,15 +117,50 @@ public sealed class TelemetryWorkspaceCoordinatorTests
 
         Assert.Equal("2x", context.Playback.SelectedPlaybackSpeed.Label);
         Assert.Equal(2, context.SessionPersistenceCoordinator.SaveCalls.Count);
-        Assert.Contains("Скорость воспроизведения изменена", context.Data.StatusText);
+        Assert.Contains("Playback speed changed", context.Data.StatusText);
     }
 
-    private static TestContext CreateContext(AppSessionSettings session)
+    [Fact]
+    public async Task LoadCsvAsync_WhenReaderFails_SetsErrorStatusAndDoesNotPersist()
+    {
+        using TestContext context = CreateContext(
+            new AppSessionSettings(),
+            reader: new ThrowingCsvTelemetryReader(new InvalidOperationException("broken csv")));
+
+        InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => context.Coordinator.LoadCsvAsync("broken.csv"));
+
+        Assert.Equal("broken csv", ex.Message);
+        Assert.Equal("CSV load failed: broken csv", context.Data.StatusText);
+        Assert.Empty(context.SessionPersistenceCoordinator.SaveCalls);
+    }
+
+    [Fact]
+    public async Task InitializeAsync_WhenCanceled_PropagatesCancellationAndResetsRestoreFlag()
+    {
+        string filePath = CreateExistingTempFile();
+        var session = new AppSessionSettings
+        {
+            LastFilePath = filePath
+        };
+
+        using TestContext context = CreateContext(
+            session,
+            reader: new ThrowingCsvTelemetryReader(new OperationCanceledException("restore canceled")));
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => context.Coordinator.InitializeAsync());
+
+        Assert.False(context.State.IsRestoringSession);
+        Assert.Empty(context.SessionPersistenceCoordinator.SaveCalls);
+
+        File.Delete(filePath);
+    }
+
+    private static TestContext CreateContext(AppSessionSettings session, ICsvTelemetryReader? reader = null)
     {
         TelemetrySessionState state = new();
-        StubCsvTelemetryReader reader = new(CreatePoints());
+        ICsvTelemetryReader resolvedReader = reader ?? new StubCsvTelemetryReader(CreatePoints());
         TelemetryDataProcessor dataProcessor = new(new TelemetryAnalyzer());
-        TelemetryDataViewModel data = new(reader, dataProcessor, state);
+        TelemetryDataViewModel data = new(resolvedReader, dataProcessor, state);
         TelemetrySelectionViewModel selection = new(data, state);
         StubPlaybackCoordinator playbackCoordinator = new();
         TelemetryPlaybackViewModel playback = new(data, selection, playbackCoordinator);
@@ -144,7 +182,8 @@ public sealed class TelemetryWorkspaceCoordinatorTests
             playback,
             map,
             playbackCoordinator,
-            sessionPersistenceCoordinator);
+            sessionPersistenceCoordinator,
+            state);
     }
 
     private static IReadOnlyList<TelemetryPoint> CreatePoints()
@@ -157,6 +196,13 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         ];
     }
 
+    private static string CreateExistingTempFile()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"motobbv_session_{Guid.NewGuid():N}.csv");
+        File.WriteAllText(path, "stub");
+        return path;
+    }
+
     private sealed class TestContext : IDisposable
     {
         public TestContext(
@@ -166,7 +212,8 @@ public sealed class TelemetryWorkspaceCoordinatorTests
             TelemetryPlaybackViewModel playback,
             TelemetryMapViewModel map,
             StubPlaybackCoordinator playbackCoordinator,
-            RecordingSessionPersistenceCoordinator sessionPersistenceCoordinator)
+            RecordingSessionPersistenceCoordinator sessionPersistenceCoordinator,
+            TelemetrySessionState state)
         {
             Coordinator = coordinator;
             Data = data;
@@ -175,6 +222,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
             Map = map;
             PlaybackCoordinator = playbackCoordinator;
             SessionPersistenceCoordinator = sessionPersistenceCoordinator;
+            State = state;
         }
 
         public TelemetryWorkspaceCoordinator Coordinator { get; }
@@ -190,6 +238,8 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         public StubPlaybackCoordinator PlaybackCoordinator { get; }
 
         public RecordingSessionPersistenceCoordinator SessionPersistenceCoordinator { get; }
+
+        public TelemetrySessionState State { get; }
 
         public void Dispose()
         {
@@ -210,6 +260,19 @@ public sealed class TelemetryWorkspaceCoordinatorTests
 
         public Task<IReadOnlyList<TelemetryPoint>> ReadAsync(string filePath, CancellationToken cancellationToken = default)
             => Task.FromResult(_points);
+    }
+
+    private sealed class ThrowingCsvTelemetryReader : ICsvTelemetryReader
+    {
+        private readonly Exception _exception;
+
+        public ThrowingCsvTelemetryReader(Exception exception)
+        {
+            _exception = exception;
+        }
+
+        public Task<IReadOnlyList<TelemetryPoint>> ReadAsync(string filePath, CancellationToken cancellationToken = default)
+            => Task.FromException<IReadOnlyList<TelemetryPoint>>(_exception);
     }
 
     private sealed class StubMapExportService : IMapExportService

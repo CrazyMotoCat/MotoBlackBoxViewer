@@ -62,9 +62,11 @@ public sealed class MainViewModel : IDisposable
             Workspace.StopPlayback(updateStatus: false);
             await Workspace.LoadCsvAsync(filePath);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException)
         {
-            Workspace.Data.StatusText = $"Ошибка загрузки CSV: {ex.Message}";
+        }
+        catch (Exception)
+        {
         }
     }
 

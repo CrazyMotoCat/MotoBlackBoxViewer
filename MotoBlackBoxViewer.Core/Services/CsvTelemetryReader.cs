@@ -7,36 +7,27 @@ namespace MotoBlackBoxViewer.Core.Services;
 
 public sealed class CsvTelemetryReader : ICsvTelemetryReader
 {
+    private static readonly Encoding StrictUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
     public async Task<IReadOnlyList<TelemetryPoint>> ReadAsync(string filePath, CancellationToken cancellationToken = default)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-        string[] lines;
-        try
-        {
-            lines = await File.ReadAllLinesAsync(filePath, Encoding.UTF8, cancellationToken);
-            if (lines.Length > 0 && lines[0].Contains('�'))
-                throw new InvalidOperationException("UTF-8 fallback needed.");
-        }
-        catch
-        {
-            lines = await File.ReadAllLinesAsync(filePath, Encoding.GetEncoding(1251), cancellationToken);
-        }
-
+        string[] lines = await ReadAllLinesWithEncodingFallbackAsync(filePath, cancellationToken);
         if (lines.Length < 2)
-            throw new InvalidOperationException("CSV пустой или не содержит данных.");
+            throw new InvalidOperationException("CSV file is empty or does not contain telemetry rows.");
 
-        var headers = lines[0].Split(';').Select(Normalize).ToArray();
+        string[] headers = ParseCsvLine(lines[0]).Select(Normalize).ToArray();
 
         int latIndex = FindColumn(headers, "широта", "latitude", "lat");
         int lonIndex = FindColumn(headers, "долгота", "longitude", "lon", "lng");
         int speedIndex = FindColumn(headers, "скорость", "speed", "speedkmh");
-        int accelZIndex = FindColumn(headers, "ускорениепoz", "accelz", "az");
+        int accelZIndex = FindColumn(headers, "ускорениепоz", "accelz", "az");
         int accelXIndex = FindColumn(headers, "ускорениеpox", "accelx", "ax");
         int accelYIndex = FindColumn(headers, "ускорениеpoy", "accely", "ay");
         int leanIndex = FindColumn(headers, "уголнаклона", "lean", "leanangle", "roll");
 
-        var result = new List<TelemetryPoint>();
+        List<TelemetryPoint> result = new();
 
         for (int i = 1; i < lines.Length; i++)
         {
@@ -45,11 +36,11 @@ public sealed class CsvTelemetryReader : ICsvTelemetryReader
             if (string.IsNullOrWhiteSpace(lines[i]))
                 continue;
 
-            var parts = lines[i].Split(';');
+            string[] parts = ParseCsvLine(lines[i]);
             if (parts.Length < headers.Length)
                 continue;
 
-            var point = new TelemetryPoint
+            TelemetryPoint point = new()
             {
                 Index = result.Count + 1,
                 Latitude = ParseDouble(parts[latIndex]),
@@ -66,6 +57,55 @@ public sealed class CsvTelemetryReader : ICsvTelemetryReader
 
         FillDistances(result);
         return result;
+    }
+
+    private static async Task<string[]> ReadAllLinesWithEncodingFallbackAsync(string filePath, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await File.ReadAllLinesAsync(filePath, StrictUtf8, cancellationToken);
+        }
+        catch (DecoderFallbackException)
+        {
+            return await File.ReadAllLinesAsync(filePath, Encoding.GetEncoding(1251), cancellationToken);
+        }
+    }
+
+    private static string[] ParseCsvLine(string line)
+    {
+        List<string> fields = new();
+        StringBuilder current = new();
+        bool inQuotes = false;
+
+        for (int i = 0; i < line.Length; i++)
+        {
+            char ch = line[i];
+
+            if (ch == '"')
+            {
+                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                {
+                    current.Append('"');
+                    i++;
+                    continue;
+                }
+
+                inQuotes = !inQuotes;
+                continue;
+            }
+
+            if (ch == ';' && !inQuotes)
+            {
+                fields.Add(current.ToString());
+                current.Clear();
+                continue;
+            }
+
+            current.Append(ch);
+        }
+
+        fields.Add(current.ToString());
+        return fields.ToArray();
     }
 
     private static string Normalize(string value)
@@ -85,20 +125,23 @@ public sealed class CsvTelemetryReader : ICsvTelemetryReader
                 return i;
         }
 
-        throw new InvalidOperationException($"Не найдена колонка. Ищу один из вариантов: {string.Join(", ", aliases)}");
+        throw new InvalidOperationException($"Required column was not found. Expected one of: {string.Join(", ", aliases)}");
     }
 
     private static double ParseDouble(string value)
     {
         value = value.Trim().Replace(',', '.');
 
-        if (double.TryParse(value, NumberStyles.Float | NumberStyles.AllowLeadingSign,
-            CultureInfo.InvariantCulture, out var result))
+        if (double.TryParse(
+            value,
+            NumberStyles.Float | NumberStyles.AllowLeadingSign,
+            CultureInfo.InvariantCulture,
+            out double result))
         {
             return result;
         }
 
-        throw new FormatException($"Не удалось распарсить число: '{value}'");
+        throw new FormatException($"Unable to parse numeric value: '{value}'");
     }
 
     private static void FillDistances(IReadOnlyList<TelemetryPoint> points)

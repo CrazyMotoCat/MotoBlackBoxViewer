@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using MotoBlackBoxViewer.App.Interfaces;
 using MotoBlackBoxViewer.App.Services;
@@ -15,30 +16,43 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        ICsvTelemetryReader reader = new CsvTelemetryReader();
-        ITelemetryAnalyzer analyzer = new TelemetryAnalyzer();
-        var dataProcessor = new TelemetryDataProcessor(analyzer);
-        IMapExportService mapExportService = new MapExportService();
-        IFileDialogService fileDialogService = new FileDialogService();
-        IPlaybackService playbackService = new PlaybackService();
-        IPlaybackCoordinator playbackCoordinator = new PlaybackCoordinator(playbackService);
-        IAppSettingsService settingsService = new JsonAppSettingsService();
-        ISessionPersistenceCoordinator sessionPersistenceCoordinator = new SessionPersistenceCoordinator(settingsService);
+        try
+        {
+            ICsvTelemetryReader reader = new CsvTelemetryReader();
+            ITelemetryAnalyzer analyzer = new TelemetryAnalyzer();
+            TelemetryDataProcessor dataProcessor = new(analyzer);
+            IMapExportService mapExportService = new MapExportService();
+            IFileDialogService fileDialogService = new FileDialogService();
+            IPlaybackService playbackService = new PlaybackService();
+            IPlaybackCoordinator playbackCoordinator = new PlaybackCoordinator(playbackService);
+            IAppSettingsService settingsService = new JsonAppSettingsService();
+            ISessionPersistenceCoordinator sessionPersistenceCoordinator = new SessionPersistenceCoordinator(settingsService);
 
-        var workspace = new TelemetryWorkspace(
-            reader,
-            dataProcessor,
-            mapExportService,
-            playbackCoordinator,
-            sessionPersistenceCoordinator);
+            TelemetryWorkspace workspace = new(
+                reader,
+                dataProcessor,
+                mapExportService,
+                playbackCoordinator,
+                sessionPersistenceCoordinator);
 
-        _mainViewModel = new MainViewModel(workspace, fileDialogService);
+            _mainViewModel = new MainViewModel(workspace, fileDialogService);
 
-        var mainWindow = new MainWindow(_mainViewModel);
-        MainWindow = mainWindow;
-        mainWindow.Show();
+            MainWindow mainWindow = new(_mainViewModel);
+            MainWindow = mainWindow;
+            mainWindow.Show();
 
-        await _mainViewModel.InitializeAsync();
+            await _mainViewModel.InitializeAsync();
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError($"Application startup failed: {ex}");
+            MessageBox.Show(
+                $"Application startup failed: {ex.Message}",
+                "MotoBlackBoxViewer",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            Shutdown(-1);
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

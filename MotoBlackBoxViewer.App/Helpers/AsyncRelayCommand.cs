@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows.Input;
 
 namespace MotoBlackBoxViewer.App.Helpers;
@@ -20,7 +21,12 @@ public sealed class AsyncRelayCommand : ICommand
 
     public async void Execute(object? parameter)
     {
-        if (!CanExecute(parameter))
+        await ExecuteAsync();
+    }
+
+    internal async Task ExecuteAsync()
+    {
+        if (!CanExecute(null))
             return;
 
         try
@@ -28,6 +34,10 @@ public sealed class AsyncRelayCommand : ICommand
             _isExecuting = true;
             RaiseCanExecuteChanged();
             await _execute();
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError($"Async command execution failed: {ex}");
         }
         finally
         {

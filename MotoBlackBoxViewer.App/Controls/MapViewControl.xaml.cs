@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Web.WebView2.Core;
+using MotoBlackBoxViewer.App.Services;
 
 namespace MotoBlackBoxViewer.App.Controls;
 
@@ -63,12 +65,12 @@ public partial class MapViewControl : UserControl
 
     private static void OnRouteStateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        _ = ((MapViewControl)d).SyncRouteStateAsync();
+        ((MapViewControl)d).ScheduleSyncRouteState();
     }
 
     private static void OnSelectedPointIndexChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        _ = ((MapViewControl)d).SyncSelectedPointAsync();
+        ((MapViewControl)d).ScheduleSyncSelectedPoint();
     }
 
     private async Task InitializeMapAsync()
@@ -82,9 +84,9 @@ public partial class MapViewControl : UserControl
             await MapWebView.EnsureCoreWebView2Async();
             MapWebView.Source = new Uri(templatePath);
         }
-        catch
+        catch (Exception ex)
         {
-            // Ошибку не пробрасываем: control должен деградировать мягко.
+            Trace.TraceError($"Failed to initialize map control: {ex}");
         }
     }
 
@@ -96,8 +98,30 @@ public partial class MapViewControl : UserControl
             _appliedRouteJson = string.Empty;
             _appliedRefreshVersion = -1;
             _appliedSelectedPointIndex = null;
-            await SyncRouteStateAsync(force: true);
-            await SyncSelectedPointAsync(force: true);
+            await RunAndTraceAsync(() => SyncRouteStateAsync(force: true));
+            await RunAndTraceAsync(() => SyncSelectedPointAsync(force: true));
+        }
+    }
+
+    private void ScheduleSyncRouteState()
+    {
+        _ = RunAndTraceAsync(() => SyncRouteStateAsync());
+    }
+
+    private void ScheduleSyncSelectedPoint()
+    {
+        _ = RunAndTraceAsync(() => SyncSelectedPointAsync());
+    }
+
+    private static async Task RunAndTraceAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError($"MapViewControl async operation failed: {ex}");
         }
     }
 
@@ -113,14 +137,14 @@ public partial class MapViewControl : UserControl
 
         if (string.IsNullOrWhiteSpace(RouteJson) || RouteJson == "[]")
         {
-            await MapWebView.ExecuteScriptAsync("window.clearRouteData();");
+            await MapWebView.ExecuteScriptAsync(MapScriptBuilder.BuildClearRouteDataScript());
             _appliedRouteJson = RouteJson;
             _appliedRefreshVersion = RefreshVersion;
             _appliedSelectedPointIndex = null;
             return;
         }
 
-        await MapWebView.ExecuteScriptAsync($"window.setRouteData({RouteJson});");
+        await MapWebView.ExecuteScriptAsync(MapScriptBuilder.BuildSetRouteDataScript(RouteJson));
         _appliedRouteJson = RouteJson;
         _appliedRefreshVersion = RefreshVersion;
         _appliedSelectedPointIndex = null;
@@ -135,11 +159,7 @@ public partial class MapViewControl : UserControl
         if (!force && _appliedSelectedPointIndex == SelectedPointIndex)
             return;
 
-        if (SelectedPointIndex.HasValue)
-            await MapWebView.ExecuteScriptAsync($"window.setSelectedIndex({SelectedPointIndex.Value});");
-        else
-            await MapWebView.ExecuteScriptAsync("window.setSelectedIndex(null);");
-
+        await MapWebView.ExecuteScriptAsync(MapScriptBuilder.BuildSetSelectedIndexScript(SelectedPointIndex));
         _appliedSelectedPointIndex = SelectedPointIndex;
     }
 }

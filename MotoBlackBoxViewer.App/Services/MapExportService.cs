@@ -35,12 +35,12 @@ public sealed class MapExportService : IMapExportService
 
         string templatePath = GetTemplatePath();
         if (!File.Exists(templatePath))
-            throw new FileNotFoundException("Не найден шаблон карты.", templatePath);
+            throw new FileNotFoundException("Map template was not found.", templatePath);
 
         string template = File.ReadAllText(templatePath, Encoding.UTF8);
         string json = BuildRouteJson(points);
 
-        string bootstrap = $"window.addEventListener(\"load\", () => setRouteData({json}));";
+        string bootstrap = MapScriptBuilder.BuildBootstrapScript(json);
         string html = template.Replace("/*__ROUTE_BOOTSTRAP__*/", bootstrap);
         string outputPath = Path.Combine(outputDirectory, $"route_{DateTime.Now:yyyyMMdd_HHmmss}.html");
         File.WriteAllText(outputPath, html, Encoding.UTF8);
