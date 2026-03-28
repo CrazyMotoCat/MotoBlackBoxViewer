@@ -11,6 +11,8 @@ public sealed class TelemetryDataViewModel : ObservableObject
     private readonly ICsvTelemetryReader _reader;
     private readonly ITelemetryAnalyzer _analyzer;
     private readonly TelemetrySessionState _state;
+    private TelemetrySeriesSnapshot _seriesSnapshot = TelemetrySeriesSnapshot.Empty;
+    private int _visibleDataVersion;
 
     public TelemetryDataViewModel(
         ICsvTelemetryReader reader,
@@ -53,22 +55,19 @@ public sealed class TelemetryDataViewModel : ObservableObject
         }
     }
 
-    public IReadOnlyList<double> SpeedSeries => Points.Select(p => p.SpeedKmh).ToArray();
+    public IReadOnlyList<double> SpeedSeries => _seriesSnapshot.SpeedSeries;
 
-    public IReadOnlyList<double> LeanSeries => Points.Select(p => p.LeanAngleDeg).ToArray();
+    public IReadOnlyList<double> LeanSeries => _seriesSnapshot.LeanSeries;
 
-    public IReadOnlyList<double> AccelXSeries => Points.Select(p => p.AccelX).ToArray();
+    public IReadOnlyList<double> AccelXSeries => _seriesSnapshot.AccelXSeries;
 
-    public IReadOnlyList<double> AccelYSeries => Points.Select(p => p.AccelY).ToArray();
+    public IReadOnlyList<double> AccelYSeries => _seriesSnapshot.AccelYSeries;
 
-    public IReadOnlyList<double> AccelZSeries => Points.Select(p => p.AccelZ).ToArray();
+    public IReadOnlyList<double> AccelZSeries => _seriesSnapshot.AccelZSeries;
 
-    public IReadOnlyList<ChartSeriesDefinition> AccelSeries =>
-    [
-        new ChartSeriesDefinition("Accel X", AccelXSeries, "#22C55E"),
-        new ChartSeriesDefinition("Accel Y", AccelYSeries, "#F59E0B"),
-        new ChartSeriesDefinition("Accel Z", AccelZSeries, "#EF4444")
-    ];
+    public IReadOnlyList<ChartSeriesDefinition> AccelSeries => _seriesSnapshot.AccelSeries;
+
+    public int VisibleDataVersion => _visibleDataVersion;
 
     public int FilterMinimum => HasSourceData ? 1 : 0;
 
@@ -110,6 +109,7 @@ public sealed class TelemetryDataViewModel : ObservableObject
         _state.CurrentFilePath = null;
         _state.FilterStartIndex = 0;
         _state.FilterEndIndex = 0;
+        _seriesSnapshot = TelemetrySeriesSnapshot.Empty;
         Statistics = new TelemetryStatistics();
         RaiseSourceDataProperties();
         RaiseVisibleDataProperties();
@@ -149,6 +149,7 @@ public sealed class TelemetryDataViewModel : ObservableObject
 
         if (!HasSourceData)
         {
+            _seriesSnapshot = TelemetrySeriesSnapshot.Empty;
             Statistics = new TelemetryStatistics();
             RaiseVisibleDataProperties();
             return null;
@@ -176,6 +177,7 @@ public sealed class TelemetryDataViewModel : ObservableObject
         foreach (TelemetryPoint point in filtered)
             _state.VisiblePoints.Add(point);
 
+        _seriesSnapshot = TelemetrySeriesSnapshot.Create(filtered);
         Statistics = _analyzer.Analyze(filtered);
         RaiseVisibleDataProperties();
         RaisePropertyChanged(nameof(FilterSummary));
@@ -268,6 +270,8 @@ public sealed class TelemetryDataViewModel : ObservableObject
 
     private void RaiseVisibleDataProperties()
     {
+        _visibleDataVersion++;
+        RaisePropertyChanged(nameof(VisibleDataVersion));
         RaisePropertyChanged(nameof(HasPoints));
         RaisePropertyChanged(nameof(HasSourceData));
         RaisePropertyChanged(nameof(SpeedSeries));

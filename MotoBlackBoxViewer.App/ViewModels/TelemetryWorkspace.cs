@@ -2,17 +2,16 @@ using System.ComponentModel;
 using MotoBlackBoxViewer.App.Helpers;
 using MotoBlackBoxViewer.App.Interfaces;
 using MotoBlackBoxViewer.App.Models;
+using MotoBlackBoxViewer.App.Services;
 using MotoBlackBoxViewer.Core.Interfaces;
-using MotoBlackBoxViewer.Core.Models;
 
 namespace MotoBlackBoxViewer.App.ViewModels;
 
 public sealed class TelemetryWorkspace : ObservableObject, IDisposable
 {
     private readonly TelemetrySessionState _state = new();
-    private readonly ISessionPersistenceCoordinator _sessionPersistenceCoordinator;
+    private readonly TelemetryWorkspaceCoordinator _coordinator;
     private bool _isDisposed;
-    private bool _suppressFilterHandling;
 
     public TelemetryWorkspace(
         ICsvTelemetryReader reader,
@@ -21,12 +20,17 @@ public sealed class TelemetryWorkspace : ObservableObject, IDisposable
         IPlaybackCoordinator playbackCoordinator,
         ISessionPersistenceCoordinator sessionPersistenceCoordinator)
     {
-        _sessionPersistenceCoordinator = sessionPersistenceCoordinator;
-
         Data = new TelemetryDataViewModel(reader, analyzer, _state);
         Selection = new TelemetrySelectionViewModel(Data, _state);
         Playback = new TelemetryPlaybackViewModel(Data, Selection, playbackCoordinator);
         Map = new TelemetryMapViewModel(Data, Selection, mapExportService, _state);
+        _coordinator = new TelemetryWorkspaceCoordinator(
+            Data,
+            Selection,
+            Playback,
+            Map,
+            _state,
+            sessionPersistenceCoordinator);
 
         Data.PropertyChanged += Data_PropertyChanged;
         Selection.PropertyChanged += Selection_PropertyChanged;
@@ -45,159 +49,28 @@ public sealed class TelemetryWorkspace : ObservableObject, IDisposable
 
     public bool HasSourceData => Data.HasSourceData;
 
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
-    {
-        AppSessionSettings session = _sessionPersistenceCoordinator.Load();
-        Playback.RestoreSpeed(session.SelectedPlaybackSpeedLabel);
+    public Task InitializeAsync(CancellationToken cancellationToken = default)
+        => _coordinator.InitializeAsync(cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(session.LastFilePath))
-            return;
+    public void SaveSession() => _coordinator.SaveSession();
 
-        if (!File.Exists(session.LastFilePath))
-        {
-            Data.StatusText = $"Последний файл не найден: {session.LastFilePath}";
-            return;
-        }
+    public Task LoadCsvAsync(string filePath, CancellationToken cancellationToken = default)
+        => _coordinator.LoadCsvAsync(filePath, cancellationToken);
 
-        try
-        {
-            _state.IsRestoringSession = true;
-            _suppressFilterHandling = true;
+    public void Clear() => _coordinator.Clear();
 
-            await Data.LoadCsvAsync(session.LastFilePath, cancellationToken);
-            Data.RestoreFilterRange(session.FilterStartIndex, session.FilterEndIndex);
-
-            TelemetryPoint? preferredPoint = Data.ApplyCurrentFilter(_state.SelectedPoint, updateStatus: false);
-            Selection.SynchronizeWithVisiblePoints(preferredPoint);
-
-            if (Data.HasPoints)
-            {
-                int restoredPosition = session.SelectedVisiblePosition <= 0
-                    ? 1
-                    : Math.Clamp(session.SelectedVisiblePosition, 1, Selection.PlaybackMaximum);
-
-                Selection.PlaybackPosition = restoredPosition;
-            }
-
-            Map.RequestRefresh();
-            Data.StatusText = $"Восстановлена последняя сессия: {Path.GetFileName(session.LastFilePath)}";
-        }
-        catch (Exception ex)
-        {
-            Data.StatusText = $"Не удалось восстановить последнюю сессию: {ex.Message}";
-        }
-        finally
-        {
-            _suppressFilterHandling = false;
-            _state.IsRestoringSession = false;
-        }
-    }
-
-    public void SaveSession() => PersistSession(includeSelectedPosition: true);
-
-    public async Task LoadCsvAsync(string filePath, CancellationToken cancellationToken = default)
-    {
-        Data.StatusText = "Читаю CSV...";
-        _suppressFilterHandling = true;
-
-        try
-        {
-            await Data.LoadCsvAsync(filePath, cancellationToken);
-
-            TelemetryPoint? preferredPoint = Data.ApplyCurrentFilter(_state.SelectedPoint, updateStatus: false);
-            Selection.SynchronizeWithVisiblePoints(preferredPoint);
-            Map.RequestRefresh();
-
-            Data.StatusText = $"Загружено точек: {Data.FilterMaximum}. Показано: {Data.Points.Count}. Файл: {Path.GetFileName(filePath)}";
-            PersistSession(includeSelectedPosition: false);
-        }
-        finally
-        {
-            _suppressFilterHandling = false;
-        }
-    }
-
-    public void Clear()
-    {
-        StopPlayback(updateStatus: false);
-        _suppressFilterHandling = true;
-
-        try
-        {
-            Data.Clear();
-            Selection.Clear();
-            Map.RequestRefresh();
-            Data.StatusText = "Данные очищены.";
-            PersistSession(includeSelectedPosition: false);
-        }
-        finally
-        {
-            _suppressFilterHandling = false;
-        }
-    }
-
-    public void ResetFilter()
-    {
-        if (!Data.HasSourceData)
-            return;
-
-        StopPlayback(updateStatus: false);
-        _suppressFilterHandling = true;
-
-        try
-        {
-            Data.ResetFilterRange();
-        }
-        finally
-        {
-            _suppressFilterHandling = false;
-        }
-
-        ApplyFilterAndSynchronize(updateStatus: true);
-    }
+    public void ResetFilter() => _coordinator.ResetFilter();
 
     public void RequestMapRefresh() => Map.RequestRefresh();
 
-    public void OpenMapInBrowser()
-    {
-        string htmlPath = Map.ExportMapHtml();
-        Map.OpenInBrowser(htmlPath);
-        Data.StatusText = $"Карта подготовлена: {htmlPath}";
-    }
+    public void OpenMapInBrowser() => _coordinator.OpenMapInBrowser();
 
     public bool MoveSelection(int delta)
         => Selection.MoveSelection(delta);
 
-    public void TogglePlayback()
-    {
-        if (!Data.HasPoints)
-            return;
+    public void TogglePlayback() => _coordinator.TogglePlayback();
 
-        if (Playback.IsPlaybackRunning)
-        {
-            StopPlayback();
-            return;
-        }
-
-        if (Playback.Start())
-            Data.StatusText = $"Воспроизведение маршрута запущено ({Playback.SelectedPlaybackSpeed.Label}).";
-    }
-
-    public void StopPlayback(bool updateStatus = true)
-    {
-        bool stopped = Playback.Stop();
-        if (updateStatus && stopped)
-            Data.StatusText = "Воспроизведение остановлено.";
-    }
-
-    private void ApplyFilterAndSynchronize(bool updateStatus)
-    {
-        TelemetryPoint? preferredPoint = _state.SelectedPoint;
-        TelemetryPoint? nextPoint = Data.ApplyCurrentFilter(preferredPoint, updateStatus);
-        Selection.SynchronizeWithVisiblePoints(nextPoint);
-        Map.RequestRefresh();
-        PersistSession(includeSelectedPosition: false);
-    }
+    public void StopPlayback(bool updateStatus = true) => _coordinator.StopPlayback(updateStatus);
 
     private void Data_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
@@ -207,52 +80,14 @@ public sealed class TelemetryWorkspace : ObservableObject, IDisposable
             RaisePropertyChanged(nameof(HasSourceData));
         }
 
-        if (_state.IsRestoringSession || _suppressFilterHandling)
-            return;
-
-        if (e.PropertyName is nameof(TelemetryDataViewModel.FilterStartIndex) or nameof(TelemetryDataViewModel.FilterEndIndex))
-        {
-            StopPlayback(updateStatus: false);
-            ApplyFilterAndSynchronize(updateStatus: true);
-        }
+        _coordinator.HandleDataPropertyChanged(e.PropertyName);
     }
 
     private void Selection_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (_state.IsRestoringSession)
-            return;
-
-        if (e.PropertyName is nameof(TelemetrySelectionViewModel.SelectedPoint)
-            or nameof(TelemetrySelectionViewModel.PlaybackPosition))
-        {
-            PersistSession(includeSelectedPosition: true);
-        }
-
-        if (e.PropertyName is nameof(TelemetrySelectionViewModel.SelectedPointIndex))
-            Map.RequestRefresh();
-    }
+        => _coordinator.HandleSelectionPropertyChanged(e.PropertyName);
 
     private void Playback_PropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (_state.IsRestoringSession)
-            return;
-
-        if (e.PropertyName is nameof(TelemetryPlaybackViewModel.SelectedPlaybackSpeed))
-        {
-            PersistSession(includeSelectedPosition: false);
-
-            if (Playback.IsPlaybackRunning)
-                Data.StatusText = $"Скорость воспроизведения изменена: {Playback.SelectedPlaybackSpeed.Label}.";
-        }
-    }
-
-    private void PersistSession(bool includeSelectedPosition)
-    {
-        if (_state.IsRestoringSession)
-            return;
-
-        _sessionPersistenceCoordinator.Save(_state, Playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
-    }
+        => _coordinator.HandlePlaybackPropertyChanged(e.PropertyName);
 
     public void Dispose()
     {

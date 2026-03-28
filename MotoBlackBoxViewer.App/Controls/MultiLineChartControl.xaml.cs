@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 
 using MotoBlackBoxViewer.App.Models;
 
@@ -7,9 +8,11 @@ namespace MotoBlackBoxViewer.App.Controls;
 
 public partial class MultiLineChartControl : UserControl
 {
+    private bool _redrawQueued;
+
     public static readonly DependencyProperty SeriesProperty = DependencyProperty.Register(
         nameof(Series),
-        typeof(IEnumerable<ChartSeriesDefinition>),
+        typeof(IReadOnlyList<ChartSeriesDefinition>),
         typeof(MultiLineChartControl),
         new PropertyMetadata(null, OnChartPropertyChanged));
 
@@ -30,9 +33,9 @@ public partial class MultiLineChartControl : UserControl
         InitializeComponent();
     }
 
-    public IEnumerable<ChartSeriesDefinition>? Series
+    public IReadOnlyList<ChartSeriesDefinition>? Series
     {
-        get => (IEnumerable<ChartSeriesDefinition>?)GetValue(SeriesProperty);
+        get => (IReadOnlyList<ChartSeriesDefinition>?)GetValue(SeriesProperty);
         set => SetValue(SeriesProperty, value);
     }
 
@@ -49,13 +52,26 @@ public partial class MultiLineChartControl : UserControl
     }
 
     private static void OnChartPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        => ((MultiLineChartControl)d).Redraw();
+        => ((MultiLineChartControl)d).ScheduleRedraw();
 
-    private void ChartCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => Redraw();
+    private void ChartCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => ScheduleRedraw();
+
+    private void ScheduleRedraw()
+    {
+        if (_redrawQueued)
+            return;
+
+        _redrawQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+        {
+            _redrawQueued = false;
+            Redraw();
+        }));
+    }
 
     private void Redraw()
     {
-        var series = Series?.ToArray() ?? Array.Empty<ChartSeriesDefinition>();
+        var series = Series ?? Array.Empty<ChartSeriesDefinition>();
         ChartRenderHelper.DrawMultiSeries(ChartCanvas, series, Unit, SelectedIndex);
     }
 }

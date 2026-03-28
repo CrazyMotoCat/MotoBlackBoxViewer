@@ -1,13 +1,16 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 
 namespace MotoBlackBoxViewer.App.Controls;
 
 public partial class LineChartControl : UserControl
 {
+    private bool _redrawQueued;
+
     public static readonly DependencyProperty ValuesProperty = DependencyProperty.Register(
         nameof(Values),
-        typeof(IEnumerable<double>),
+        typeof(IReadOnlyList<double>),
         typeof(LineChartControl),
         new PropertyMetadata(null, OnChartPropertyChanged));
 
@@ -40,9 +43,9 @@ public partial class LineChartControl : UserControl
         InitializeComponent();
     }
 
-    public IEnumerable<double>? Values
+    public IReadOnlyList<double>? Values
     {
-        get => (IEnumerable<double>?)GetValue(ValuesProperty);
+        get => (IReadOnlyList<double>?)GetValue(ValuesProperty);
         set => SetValue(ValuesProperty, value);
     }
 
@@ -71,13 +74,26 @@ public partial class LineChartControl : UserControl
     }
 
     private static void OnChartPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        => ((LineChartControl)d).Redraw();
+        => ((LineChartControl)d).ScheduleRedraw();
 
-    private void ChartCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => Redraw();
+    private void ChartCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => ScheduleRedraw();
+
+    private void ScheduleRedraw()
+    {
+        if (_redrawQueued)
+            return;
+
+        _redrawQueued = true;
+        Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+        {
+            _redrawQueued = false;
+            Redraw();
+        }));
+    }
 
     private void Redraw()
     {
-        var values = Values?.ToArray() ?? Array.Empty<double>();
+        var values = Values ?? Array.Empty<double>();
         ChartRenderHelper.DrawSingleSeries(ChartCanvas, values, Unit, SelectedIndex, LineColorHex, SeriesLabel);
     }
 }

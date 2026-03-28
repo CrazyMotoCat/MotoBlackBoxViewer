@@ -64,7 +64,7 @@ public sealed class TelemetryMapViewModel : ObservableObject
 
     private void Data_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(TelemetryDataViewModel.SpeedSeries)
+        if (e.PropertyName is nameof(TelemetryDataViewModel.VisibleDataVersion)
             or nameof(TelemetryDataViewModel.HasPoints)
             or nameof(TelemetryDataViewModel.FilterSummary))
         {
