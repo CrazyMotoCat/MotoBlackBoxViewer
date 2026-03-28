@@ -12,6 +12,9 @@ public partial class MapViewControl : UserControl
     private string _appliedRouteJson = string.Empty;
     private int _appliedRefreshVersion = -1;
     private int? _appliedSelectedPointIndex;
+    private bool _routeSyncPending;
+    private bool _selectionSyncPending;
+    private bool _isSyncLoopRunning;
 
     public static readonly DependencyProperty RouteJsonProperty = DependencyProperty.Register(
         nameof(RouteJson),
@@ -65,12 +68,12 @@ public partial class MapViewControl : UserControl
 
     private static void OnRouteStateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        ((MapViewControl)d).ScheduleSyncRouteState();
+        ((MapViewControl)d).ScheduleSync(includeRoute: true, includeSelection: false);
     }
 
     private static void OnSelectedPointIndexChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        ((MapViewControl)d).ScheduleSyncSelectedPoint();
+        ((MapViewControl)d).ScheduleSync(includeRoute: false, includeSelection: true);
     }
 
     private async Task InitializeMapAsync()
@@ -103,14 +106,19 @@ public partial class MapViewControl : UserControl
         }
     }
 
-    private void ScheduleSyncRouteState()
+    private void ScheduleSync(bool includeRoute, bool includeSelection)
     {
-        _ = RunAndTraceAsync(() => SyncRouteStateAsync());
-    }
+        if (includeRoute)
+            _routeSyncPending = true;
 
-    private void ScheduleSyncSelectedPoint()
-    {
-        _ = RunAndTraceAsync(() => SyncSelectedPointAsync());
+        if (includeSelection)
+            _selectionSyncPending = true;
+
+        if (_isSyncLoopRunning)
+            return;
+
+        _isSyncLoopRunning = true;
+        _ = RunAndTraceAsync(ProcessPendingSyncLoopAsync);
     }
 
     private static async Task RunAndTraceAsync(Func<Task> action)
@@ -122,6 +130,39 @@ public partial class MapViewControl : UserControl
         catch (Exception ex)
         {
             Trace.TraceError($"MapViewControl async operation failed: {ex}");
+        }
+    }
+
+    private async Task ProcessPendingSyncLoopAsync()
+    {
+        try
+        {
+            while (true)
+            {
+                bool syncRoute = _routeSyncPending;
+                bool syncSelection = _selectionSyncPending;
+
+                _routeSyncPending = false;
+                _selectionSyncPending = false;
+
+                if (!syncRoute && !syncSelection)
+                    break;
+
+                if (syncRoute)
+                {
+                    await SyncRouteStateAsync();
+                    continue;
+                }
+
+                await SyncSelectedPointAsync();
+            }
+        }
+        finally
+        {
+            _isSyncLoopRunning = false;
+
+            if (_routeSyncPending || _selectionSyncPending)
+                ScheduleSync(includeRoute: false, includeSelection: false);
         }
     }
 
