@@ -21,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MotoBlackBoxViewer.App\MotoBlackBoxViewer.App.csproj" />
     <ProjectReference Include="..\MotoBlackBoxViewer.Core\MotoBlackBoxViewer.Core.csproj" />
   </ItemGroup>
 </Project>

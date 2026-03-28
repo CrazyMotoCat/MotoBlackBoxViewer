@@ -79,7 +79,7 @@ internal sealed class TelemetryWorkspaceCoordinator
         }
     }
 
-    public void SaveSession() => PersistSession(includeSelectedPosition: true);
+    public void SaveSession() => FlushSession(includeSelectedPosition: true);
 
     public async Task LoadCsvAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -194,8 +194,6 @@ internal sealed class TelemetryWorkspaceCoordinator
             PersistSession(includeSelectedPosition: true);
         }
 
-        if (propertyName is nameof(TelemetrySelectionViewModel.SelectedPointIndex))
-            _map.RequestRefresh();
     }
 
     public void HandlePlaybackPropertyChanged(string? propertyName)
@@ -227,5 +225,13 @@ internal sealed class TelemetryWorkspaceCoordinator
             return;
 
         _sessionPersistenceCoordinator.Save(_state, _playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
+    }
+
+    private void FlushSession(bool includeSelectedPosition)
+    {
+        if (_state.IsRestoringSession)
+            return;
+
+        _sessionPersistenceCoordinator.Flush(_state, _playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
     }
 }

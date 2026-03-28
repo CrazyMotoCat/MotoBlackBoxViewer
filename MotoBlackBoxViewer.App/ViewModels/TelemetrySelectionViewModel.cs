@@ -102,38 +102,51 @@ public sealed class TelemetrySelectionViewModel : ObservableObject
 
     private void SetSelectedPoint(TelemetryPoint? value, bool syncPlayback)
     {
-        if (ReferenceEquals(_state.SelectedPoint, value) || Equals(_state.SelectedPoint, value))
-            return;
+        int targetPosition = syncPlayback
+            ? GetVisiblePositionOf(value)
+            : _state.PlaybackPosition;
 
-        _state.SelectedPoint = value;
-        RaiseSelectionProperties();
-
-        if (syncPlayback)
-        {
-            int targetPosition = GetVisiblePositionOf(value);
-            SetPlaybackPosition(targetPosition, syncSelectedPoint: false);
-        }
+        ApplySelectionState(value, targetPosition);
     }
 
     private void SetPlaybackPosition(int value, bool syncSelectedPoint)
     {
         int clamped = !_data.HasPoints ? 0 : Math.Clamp(value, 1, PlaybackMaximum);
-        if (_state.PlaybackPosition == clamped)
-            return;
+        TelemetryPoint? point = syncSelectedPoint
+            ? (clamped == 0 ? null : _data.Points[clamped - 1])
+            : _state.SelectedPoint;
 
-        _state.PlaybackPosition = clamped;
-        RaisePropertyChanged(nameof(PlaybackPosition));
-        RaisePropertyChanged(nameof(PlaybackSummary));
-
-        if (syncSelectedPoint)
-        {
-            TelemetryPoint? point = clamped == 0 ? null : _data.Points[clamped - 1];
-            SetSelectedPoint(point, syncPlayback: false);
-        }
+        ApplySelectionState(point, clamped);
     }
 
     private int GetVisiblePositionOf(TelemetryPoint? point)
         => _data.GetVisiblePositionOf(point);
+
+    private void ApplySelectionState(TelemetryPoint? selectedPoint, int playbackPosition)
+    {
+        bool selectedChanged = !ReferenceEquals(_state.SelectedPoint, selectedPoint)
+            && !Equals(_state.SelectedPoint, selectedPoint);
+        bool playbackChanged = _state.PlaybackPosition != playbackPosition;
+
+        if (!selectedChanged && !playbackChanged)
+            return;
+
+        _state.SelectedPoint = selectedPoint;
+        _state.PlaybackPosition = playbackPosition;
+
+        if (selectedChanged)
+        {
+            RaisePropertyChanged(nameof(SelectedPoint));
+            RaisePropertyChanged(nameof(SelectedPointIndex));
+            RaisePropertyChanged(nameof(SelectedPointSummary));
+        }
+
+        if (playbackChanged)
+            RaisePropertyChanged(nameof(PlaybackPosition));
+
+        if (selectedChanged || playbackChanged)
+            RaisePropertyChanged(nameof(PlaybackSummary));
+    }
 
     private void Data_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {

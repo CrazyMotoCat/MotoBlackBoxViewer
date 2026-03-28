@@ -7,24 +7,27 @@ namespace MotoBlackBoxViewer.App.Controls;
 public partial class MapViewControl : UserControl
 {
     private bool _isMapReady;
+    private string _appliedRouteJson = string.Empty;
+    private int _appliedRefreshVersion = -1;
+    private int? _appliedSelectedPointIndex;
 
     public static readonly DependencyProperty RouteJsonProperty = DependencyProperty.Register(
         nameof(RouteJson),
         typeof(string),
         typeof(MapViewControl),
-        new PropertyMetadata(string.Empty, OnMapPropertyChanged));
+        new PropertyMetadata(string.Empty, OnRouteStateChanged));
 
     public static readonly DependencyProperty SelectedPointIndexProperty = DependencyProperty.Register(
         nameof(SelectedPointIndex),
         typeof(int?),
         typeof(MapViewControl),
-        new PropertyMetadata(null, OnMapPropertyChanged));
+        new PropertyMetadata(null, OnSelectedPointIndexChanged));
 
     public static readonly DependencyProperty RefreshVersionProperty = DependencyProperty.Register(
         nameof(RefreshVersion),
         typeof(int),
         typeof(MapViewControl),
-        new PropertyMetadata(0, OnMapPropertyChanged));
+        new PropertyMetadata(0, OnRouteStateChanged));
 
     public MapViewControl()
     {
@@ -58,9 +61,14 @@ public partial class MapViewControl : UserControl
         await InitializeMapAsync();
     }
 
-    private static void OnMapPropertyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    private static void OnRouteStateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
     {
-        _ = ((MapViewControl)d).SyncMapStateAsync();
+        _ = ((MapViewControl)d).SyncRouteStateAsync();
+    }
+
+    private static void OnSelectedPointIndexChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        _ = ((MapViewControl)d).SyncSelectedPointAsync();
     }
 
     private async Task InitializeMapAsync()
@@ -84,25 +92,54 @@ public partial class MapViewControl : UserControl
     {
         _isMapReady = e.IsSuccess;
         if (_isMapReady)
-            await SyncMapStateAsync();
+        {
+            _appliedRouteJson = string.Empty;
+            _appliedRefreshVersion = -1;
+            _appliedSelectedPointIndex = null;
+            await SyncRouteStateAsync(force: true);
+            await SyncSelectedPointAsync(force: true);
+        }
     }
 
-    private async Task SyncMapStateAsync()
+    private async Task SyncRouteStateAsync(bool force = false)
     {
         if (!_isMapReady || MapWebView.CoreWebView2 is null)
+            return;
+
+        bool routeChanged = !string.Equals(_appliedRouteJson, RouteJson, StringComparison.Ordinal);
+        bool refreshRequested = _appliedRefreshVersion != RefreshVersion;
+        if (!force && !routeChanged && !refreshRequested)
             return;
 
         if (string.IsNullOrWhiteSpace(RouteJson) || RouteJson == "[]")
         {
             await MapWebView.ExecuteScriptAsync("window.clearRouteData();");
+            _appliedRouteJson = RouteJson;
+            _appliedRefreshVersion = RefreshVersion;
+            _appliedSelectedPointIndex = null;
             return;
         }
 
         await MapWebView.ExecuteScriptAsync($"window.setRouteData({RouteJson});");
+        _appliedRouteJson = RouteJson;
+        _appliedRefreshVersion = RefreshVersion;
+        _appliedSelectedPointIndex = null;
+        await SyncSelectedPointAsync(force: true);
+    }
+
+    private async Task SyncSelectedPointAsync(bool force = false)
+    {
+        if (!_isMapReady || MapWebView.CoreWebView2 is null)
+            return;
+
+        if (!force && _appliedSelectedPointIndex == SelectedPointIndex)
+            return;
 
         if (SelectedPointIndex.HasValue)
             await MapWebView.ExecuteScriptAsync($"window.setSelectedIndex({SelectedPointIndex.Value});");
         else
             await MapWebView.ExecuteScriptAsync("window.setSelectedIndex(null);");
+
+        _appliedSelectedPointIndex = SelectedPointIndex;
     }
 }

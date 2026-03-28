@@ -12,6 +12,7 @@ public sealed class TelemetryMapViewModel : ObservableObject
     private readonly TelemetrySelectionViewModel _selection;
     private readonly IMapExportService _mapExportService;
     private readonly TelemetrySessionState _state;
+    private string _routeJson = "[]";
 
     public TelemetryMapViewModel(
         TelemetryDataViewModel data,
@@ -28,7 +29,7 @@ public sealed class TelemetryMapViewModel : ObservableObject
         _selection.PropertyChanged += Selection_PropertyChanged;
     }
 
-    public string RouteJson => _mapExportService.BuildRouteJson(_data.Points);
+    public string RouteJson => _routeJson;
 
     public int? SelectedPointIndex => _selection.SelectedPointIndex;
 
@@ -64,17 +65,23 @@ public sealed class TelemetryMapViewModel : ObservableObject
 
     private void Data_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(TelemetryDataViewModel.VisibleDataVersion)
-            or nameof(TelemetryDataViewModel.HasPoints)
-            or nameof(TelemetryDataViewModel.FilterSummary))
-        {
-            RaisePropertyChanged(nameof(RouteJson));
-        }
+        if (e.PropertyName is nameof(TelemetryDataViewModel.VisibleDataVersion))
+            UpdateRouteJson();
     }
 
     private void Selection_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(TelemetrySelectionViewModel.SelectedPointIndex))
             RaisePropertyChanged(nameof(SelectedPointIndex));
+    }
+
+    private void UpdateRouteJson()
+    {
+        string nextRouteJson = _mapExportService.BuildRouteJson(_data.Points);
+        if (string.Equals(_routeJson, nextRouteJson, StringComparison.Ordinal))
+            return;
+
+        _routeJson = nextRouteJson;
+        RaisePropertyChanged(nameof(RouteJson));
     }
 }

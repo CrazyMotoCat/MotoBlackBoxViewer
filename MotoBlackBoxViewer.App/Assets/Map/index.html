@@ -54,10 +54,12 @@
   <script>
     let map;
     let routeData = [];
+    let routeDataByIndex = new Map();
     let routeLine = null;
     let startMarker = null;
     let finishMarker = null;
     let selectedMarker = null;
+    let lastPanAt = 0;
 
     const statusEl = document.getElementById('status');
     const pointCardEl = document.getElementById('pointCard');
@@ -106,6 +108,7 @@
 
     function setRouteData(points) {
       routeData = Array.isArray(points) ? points : [];
+      routeDataByIndex = new Map(routeData.map(point => [Number(point.index), point]));
 
       if (!map) return;
       clearMapObjects();
@@ -144,7 +147,6 @@
 
       map.fitBounds(routeLine.getBounds(), { padding: [28, 28] });
       setStatus(`Маршрут загружен: <b>${routeData.length}</b> точек. Выберите строку справа, чтобы подсветить точку.`);
-      setSelectedIndex(first.index);
     }
 
     function setSelectedIndex(index) {
@@ -162,24 +164,30 @@
         return;
       }
 
-      const point = routeData.find(p => Number(p.index) === Number(index));
+      const point = routeDataByIndex.get(Number(index));
       if (!point) {
         return;
       }
 
-      if (selectedMarker) {
-        map.removeLayer(selectedMarker);
+      if (!selectedMarker) {
+        selectedMarker = L.circleMarker([point.lat, point.lon], {
+          radius: 9,
+          color: '#f97316',
+          weight: 3,
+          fillColor: '#fb923c',
+          fillOpacity: 0.9
+        }).addTo(map);
+      } else {
+        selectedMarker.setLatLng([point.lat, point.lon]);
       }
 
-      selectedMarker = L.circleMarker([point.lat, point.lon], {
-        radius: 9,
-        color: '#f97316',
-        weight: 3,
-        fillColor: '#fb923c',
-        fillOpacity: 0.9
-      }).addTo(map);
-
-      map.panTo([point.lat, point.lon], { animate: true, duration: 0.35 });
+      const now = Date.now();
+      const shouldAnimatePan = now - lastPanAt >= 250;
+      map.panTo([point.lat, point.lon], {
+        animate: shouldAnimatePan,
+        duration: shouldAnimatePan ? 0.25 : 0
+      });
+      lastPanAt = now;
 
       setPointCardHtml(`
         <div class="title">Точка #${point.index}</div>
@@ -193,6 +201,7 @@
 
     function clearRouteData() {
       routeData = [];
+      routeDataByIndex = new Map();
       clearMapObjects();
       setStatus('Маршрут очищен. Загрузите CSV в приложении.');
       setPointCardHtml('<div class="title">Текущая точка</div><div class="muted">Точка еще не выбрана</div>');
