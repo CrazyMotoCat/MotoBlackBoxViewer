@@ -9,6 +9,9 @@ namespace MotoBlackBoxViewer.App.Controls;
 
 public partial class MapViewControl : UserControl
 {
+    private const string MapHostName = "appassets.motoblackboxviewer";
+    private static readonly Uri MapPageUri = new($"https://{MapHostName}/index.html");
+
     private bool _isMapReady;
     private string _appliedRouteJson = string.Empty;
     private int _appliedRefreshVersion = -1;
@@ -81,12 +84,17 @@ public partial class MapViewControl : UserControl
     {
         try
         {
-            string templatePath = Path.Combine(AppContext.BaseDirectory, "Assets", "Map", "index.html");
+            string assetsFolder = Path.Combine(AppContext.BaseDirectory, "Assets", "Map");
+            string templatePath = Path.Combine(assetsFolder, "index.html");
             if (!File.Exists(templatePath))
                 return;
 
             await MapWebView.EnsureCoreWebView2Async();
-            MapWebView.Source = new Uri(templatePath);
+            MapWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                MapHostName,
+                assetsFolder,
+                CoreWebView2HostResourceAccessKind.Allow);
+            MapWebView.Source = MapPageUri;
         }
         catch (Exception ex)
         {

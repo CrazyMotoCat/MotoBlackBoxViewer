@@ -42,7 +42,7 @@ internal static class ChartRenderHelper
 
         var layout = ChartLayout.Create(canvas.ActualWidth, canvas.ActualHeight);
         ChartRange range = ChartRange.FromSeriesSet(seriesSet);
-        ChartPalette primaryPalette = CreatePalette("#38BDF8");
+        ChartPalette primaryPalette = CreatePalette("#C65A69");
         int pointCount = seriesSet.Max(s => s.Values.Count);
 
         DrawAxes(canvas, layout, range, unit, pointCount, primaryPalette);
@@ -156,11 +156,11 @@ internal static class ChartRenderHelper
 
     private static ChartPalette CreatePalette(string lineColorHex)
         => new(
-            CreateBrush("#334155"),
-            CreateBrush("#94A3B8"),
+            CreateBrush("#2D3742"),
+            CreateBrush("#728091"),
             CreateBrush(lineColorHex),
-            CreateBrush("#E5E7EB"),
-            CreateBrush("#F97316"));
+            CreateBrush("#D9E0E7"),
+            CreateBrush("#D08A98"));
 
     private static SolidColorBrush CreateBrush(string colorHex)
         => new((Color)ColorConverter.ConvertFromString(colorHex));

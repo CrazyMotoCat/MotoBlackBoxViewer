@@ -10,29 +10,75 @@
         Width="1500"
         MinHeight="780"
         MinWidth="1240"
-        Background="#FF111827">
-    <Grid Margin="12">
+        Background="{StaticResource WindowBrush}">
+    <Grid Margin="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#FF1F2937" CornerRadius="10" Padding="12" Margin="0,0,0,12">
-            <DockPanel LastChildFill="True">
-                <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                    <Button Content="Открыть CSV" Width="130" Height="36" Margin="0,0,8,0" Command="{Binding OpenCsvCommand}" />
-                    <Button Content="Обновить карту" Width="130" Height="36" Margin="0,0,8,0" Command="{Binding RefreshMapCommand}" />
-                    <Button Content="Открыть в браузере" Width="150" Height="36" Margin="0,0,8,0" Command="{Binding OpenMapCommand}" />
-                    <Button Content="Сброс диапазона" Width="140" Height="36" Margin="0,0,8,0" Command="{Binding ResetFilterCommand}" />
-                    <Button Content="Очистить" Width="110" Height="36" Command="{Binding ClearCommand}" />
-                </StackPanel>
+        <Border Grid.Row="0"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrushTheme}"
+                BorderThickness="1"
+                CornerRadius="14"
+                Padding="12"
+                Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-                <StackPanel Orientation="Vertical" HorizontalAlignment="Right">
-                    <TextBlock Text="{Binding Workspace.Data.CurrentFileName}" Foreground="White" FontSize="14" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding Workspace.Selection.SelectedPointSummary}" Foreground="#FF94A3B8" FontSize="12" Margin="0,2,0,0" />
-                </StackPanel>
-            </DockPanel>
+                <WrapPanel Grid.Column="0"
+                           VerticalAlignment="Center"
+                           ItemHeight="32">
+                    <Button Style="{StaticResource ToolbarPrimaryButtonStyle}"
+                            Content="Импорт CSV"
+                            Margin="0,0,8,0"
+                            Command="{Binding OpenCsvCommand}" />
+                    <Button Style="{StaticResource ToolbarButtonStyle}"
+                            Content="Карта"
+                            Margin="0,0,8,0"
+                            Command="{Binding RefreshMapCommand}" />
+                    <Button Style="{StaticResource ToolbarButtonStyle}"
+                            Content="Браузер"
+                            Margin="0,0,10,0"
+                            Command="{Binding OpenMapCommand}" />
+                    <Border Width="1"
+                            Height="20"
+                            Background="{StaticResource BorderBrushTheme}"
+                            Margin="0,6,10,6" />
+                    <Button Style="{StaticResource ToolbarButtonStyle}"
+                            Content="Сброс"
+                            Margin="0,0,8,0"
+                            Command="{Binding ResetFilterCommand}" />
+                    <Button Style="{StaticResource ToolbarButtonStyle}"
+                            Content="Очистить"
+                            Command="{Binding ClearCommand}" />
+                </WrapPanel>
+
+                <Border Grid.Column="1"
+                        Background="{StaticResource SurfaceSubtleBrush}"
+                        BorderBrush="{StaticResource BorderBrushTheme}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="12,8"
+                        Margin="12,0,0,0"
+                        VerticalAlignment="Center">
+                    <StackPanel>
+                        <TextBlock Text="{Binding Workspace.Data.CurrentFileName}"
+                                   Foreground="{StaticResource TextBrushTheme}"
+                                   FontSize="13"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Workspace.Selection.SelectedPointSummary}"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   FontSize="11"
+                                   Margin="0,3,0,0" />
+                    </StackPanel>
+                </Border>
+            </Grid>
         </Border>
 
         <Grid Grid.Row="1">
@@ -41,7 +87,13 @@
                 <ColumnDefinition Width="1.45*" />
             </Grid.ColumnDefinitions>
 
-            <Border Grid.Column="0" Background="#FF1F2937" CornerRadius="10" Padding="12" Margin="0,0,12,0">
+            <Border Grid.Column="0"
+                    Background="{StaticResource SurfaceBrush}"
+                    BorderBrush="{StaticResource BorderBrushTheme}"
+                    BorderThickness="1"
+                    CornerRadius="14"
+                    Padding="12"
+                    Margin="0,0,12,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -49,7 +101,11 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <TextBlock Text="Карта маршрута" Foreground="White" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
+                    <TextBlock Text="Маршрут"
+                               Foreground="{StaticResource TextBrushTheme}"
+                               FontSize="21"
+                               FontWeight="SemiBold"
+                               Margin="2,0,0,12" />
 
                     <controls:MapViewControl Grid.Row="1"
                                              RouteJson="{Binding Workspace.Map.RouteJson}"
@@ -57,119 +113,211 @@
                                              RefreshVersion="{Binding Workspace.Map.RefreshVersion}" />
 
                     <StackPanel Grid.Row="2" Margin="0,12,0,0">
-                        <Border Background="#FF0F172A" CornerRadius="8" Padding="10">
-                            <StackPanel>
-                                <TextBlock Text="Воспроизведение маршрута" Foreground="White" FontSize="15" FontWeight="SemiBold" />
-                                <Grid Margin="0,10,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource OverlayCardStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
 
-                                    <Button Grid.Column="0" Content="◀" Width="42" Height="34" Margin="0,0,8,0"
-                                            IsEnabled="{Binding Workspace.Data.HasPoints}" Command="{Binding PrevPointCommand}" />
-                                    <Button Grid.Column="1" Content="{Binding Workspace.Playback.PlaybackButtonText}" Width="92" Height="34" Margin="0,0,8,0"
-                                            IsEnabled="{Binding Workspace.Data.HasPoints}" Command="{Binding TogglePlaybackCommand}" />
-                                    <Button Grid.Column="2" Content="▶" Width="42" Height="34" Margin="0,0,12,0"
-                                            IsEnabled="{Binding Workspace.Data.HasPoints}" Command="{Binding NextPointCommand}" />
+                                <TextBlock Grid.Row="0"
+                                           Grid.Column="0"
+                                           Text="Playback"
+                                           Foreground="{StaticResource TextBrushTheme}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="0"
+                                           Grid.Column="1"
+                                           Grid.ColumnSpan="5"
+                                           Text="{Binding Workspace.Playback.PlaybackSpeedSummary}"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           FontSize="11"
+                                           Margin="12,0,0,0"
+                                           VerticalAlignment="Center" />
 
-                                    <Slider Grid.Column="3"
-                                            Minimum="{Binding Workspace.Selection.PlaybackMinimum}"
-                                            Maximum="{Binding Workspace.Selection.PlaybackMaximum}"
-                                            Value="{Binding Workspace.Selection.PlaybackPosition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                            IsEnabled="{Binding Workspace.Data.HasPoints}"
-                                            IsSnapToTickEnabled="True"
-                                            TickFrequency="1"
-                                            SmallChange="1"
-                                            LargeChange="1"
-                                            VerticalAlignment="Center" />
+                                <Button Grid.Row="1"
+                                        Grid.Column="0"
+                                        Content="◀"
+                                        Width="34"
+                                        Height="28"
+                                        Margin="0,8,6,0"
+                                        IsEnabled="{Binding Workspace.Data.HasPoints}"
+                                        Command="{Binding PrevPointCommand}" />
+                                <Button Grid.Row="1"
+                                        Grid.Column="1"
+                                        Style="{StaticResource PrimaryButtonStyle}"
+                                        Content="{Binding Workspace.Playback.PlaybackButtonText}"
+                                        MinWidth="78"
+                                        Height="28"
+                                        Margin="0,8,6,0"
+                                        IsEnabled="{Binding Workspace.Data.HasPoints}"
+                                        Command="{Binding TogglePlaybackCommand}" />
+                                <Button Grid.Row="1"
+                                        Grid.Column="2"
+                                        Content="▶"
+                                        Width="34"
+                                        Height="28"
+                                        Margin="0,8,10,0"
+                                        IsEnabled="{Binding Workspace.Data.HasPoints}"
+                                        Command="{Binding NextPointCommand}" />
 
-                                    <ComboBox Grid.Column="4"
-                                              Width="86"
-                                              Height="30"
-                                              Margin="12,0,0,0"
-                                              ItemsSource="{Binding Workspace.Playback.PlaybackSpeedOptions}"
-                                              SelectedItem="{Binding Workspace.Playback.SelectedPlaybackSpeed, Mode=TwoWay}"
-                                              DisplayMemberPath="Label"
-                                              IsEnabled="{Binding Workspace.Data.HasPoints}"
-                                              VerticalAlignment="Center" />
+                                <Slider Grid.Row="1"
+                                        Grid.Column="3"
+                                        Minimum="{Binding Workspace.Selection.PlaybackMinimum}"
+                                        Maximum="{Binding Workspace.Selection.PlaybackMaximum}"
+                                        Value="{Binding Workspace.Selection.PlaybackPosition, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        IsEnabled="{Binding Workspace.Data.HasPoints}"
+                                        IsSnapToTickEnabled="True"
+                                        TickFrequency="1"
+                                        SmallChange="1"
+                                        LargeChange="1"
+                                        VerticalAlignment="Center"
+                                        Margin="0,8,10,0" />
 
-                                    <TextBlock Grid.Column="5"
-                                               Text="{Binding Workspace.Selection.PlaybackSummary}"
-                                               Foreground="#FFE5E7EB"
-                                               FontSize="13"
-                                               Margin="12,0,0,0"
-                                               VerticalAlignment="Center" />
-                                </Grid>
+                                <ComboBox Grid.Row="1"
+                                          Grid.Column="4"
+                                          Width="74"
+                                          Height="28"
+                                          Margin="0,8,10,0"
+                                          ItemsSource="{Binding Workspace.Playback.PlaybackSpeedOptions}"
+                                          SelectedItem="{Binding Workspace.Playback.SelectedPlaybackSpeed, Mode=TwoWay}"
+                                          DisplayMemberPath="Label"
+                                          IsEnabled="{Binding Workspace.Data.HasPoints}"
+                                          VerticalAlignment="Center" />
 
-                                <TextBlock Text="{Binding Workspace.Playback.PlaybackSpeedSummary}" Foreground="#FF94A3B8" FontSize="12" Margin="0,8,0,0" />
-                            </StackPanel>
+                                <TextBlock Grid.Row="1"
+                                           Grid.Column="5"
+                                           Text="{Binding Workspace.Selection.PlaybackSummary}"
+                                           Foreground="{StaticResource TextBrushTheme}"
+                                           FontSize="12"
+                                           Margin="0,8,0,0"
+                                           VerticalAlignment="Center" />
+                            </Grid>
                         </Border>
 
-                        <Border Background="#FF0F172A" CornerRadius="8" Padding="10" Margin="0,10,0,0">
-                            <StackPanel>
-                                <DockPanel LastChildFill="True">
-                                    <TextBlock Text="Фильтр диапазона точек" Foreground="White" FontSize="15" FontWeight="SemiBold" DockPanel.Dock="Left" />
-                                    <Button Content="Сбросить" Width="90" Height="28" DockPanel.Dock="Right" Command="{Binding ResetFilterCommand}" />
-                                </DockPanel>
+                        <Border Style="{StaticResource OverlayCardStyle}"
+                                Margin="0,8,0,0">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="56" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="56" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
 
-                                <Grid Margin="0,10,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="76" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="64" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="От точки" Foreground="#FFE5E7EB" VerticalAlignment="Center" />
-                                    <Slider Grid.Column="1"
-                                            Minimum="{Binding Workspace.Data.FilterMinimum}"
-                                            Maximum="{Binding Workspace.Data.FilterMaximum}"
-                                            Value="{Binding Workspace.Data.FilterStartIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                            IsEnabled="{Binding Workspace.Data.HasSourceData}"
-                                            IsSnapToTickEnabled="True"
-                                            TickFrequency="1"
-                                            SmallChange="1"
-                                            LargeChange="10"
-                                            VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="2" Text="{Binding Workspace.Data.FilterStartIndex}" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                </Grid>
+                                <TextBlock Grid.Row="0"
+                                           Grid.Column="0"
+                                           Text="Диапазон точек"
+                                           Foreground="{StaticResource TextBrushTheme}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="0"
+                                           Grid.Column="1"
+                                           Grid.ColumnSpan="6"
+                                           Text="{Binding Workspace.Data.FilterSummary}"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           FontSize="11"
+                                           Margin="12,0,0,0"
+                                           VerticalAlignment="Center" />
+                                <Button Grid.Row="0"
+                                        Grid.Column="7"
+                                        Style="{StaticResource ToolbarButtonStyle}"
+                                        Content="Сброс"
+                                        MinWidth="74"
+                                        Height="28"
+                                        Command="{Binding ResetFilterCommand}" />
 
-                                <Grid Margin="0,8,0,0">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="76" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="64" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="До точки" Foreground="#FFE5E7EB" VerticalAlignment="Center" />
-                                    <Slider Grid.Column="1"
-                                            Minimum="{Binding Workspace.Data.FilterMinimum}"
-                                            Maximum="{Binding Workspace.Data.FilterMaximum}"
-                                            Value="{Binding Workspace.Data.FilterEndIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                            IsEnabled="{Binding Workspace.Data.HasSourceData}"
-                                            IsSnapToTickEnabled="True"
-                                            TickFrequency="1"
-                                            SmallChange="1"
-                                            LargeChange="10"
-                                            VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="2" Text="{Binding Workspace.Data.FilterEndIndex}" Foreground="White" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                </Grid>
+                                <TextBlock Grid.Row="1"
+                                           Grid.Column="0"
+                                           Text="От"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           Margin="0,8,8,0"
+                                           VerticalAlignment="Center" />
+                                <Slider Grid.Row="1"
+                                        Grid.Column="1"
+                                        Minimum="{Binding Workspace.Data.FilterMinimum}"
+                                        Maximum="{Binding Workspace.Data.FilterMaximum}"
+                                        Value="{Binding Workspace.Data.FilterStartIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        IsEnabled="{Binding Workspace.Data.HasSourceData}"
+                                        IsSnapToTickEnabled="True"
+                                        TickFrequency="1"
+                                        SmallChange="1"
+                                        LargeChange="10"
+                                        Margin="0,8,8,0"
+                                        VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="1"
+                                           Grid.Column="2"
+                                           Text="{Binding Workspace.Data.FilterStartIndex}"
+                                           Foreground="{StaticResource TextBrushTheme}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,8,0,0"
+                                           HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" />
 
-                                <TextBlock Text="{Binding Workspace.Data.FilterSummary}" Foreground="#FF94A3B8" FontSize="12" Margin="0,8,0,0" />
-                            </StackPanel>
+                                <TextBlock Grid.Row="1"
+                                           Grid.Column="4"
+                                           Text="До"
+                                           Foreground="{StaticResource MutedTextBrush}"
+                                           Margin="8,8,8,0"
+                                           VerticalAlignment="Center" />
+                                <Slider Grid.Row="1"
+                                        Grid.Column="5"
+                                        Minimum="{Binding Workspace.Data.FilterMinimum}"
+                                        Maximum="{Binding Workspace.Data.FilterMaximum}"
+                                        Value="{Binding Workspace.Data.FilterEndIndex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        IsEnabled="{Binding Workspace.Data.HasSourceData}"
+                                        IsSnapToTickEnabled="True"
+                                        TickFrequency="1"
+                                        SmallChange="1"
+                                        LargeChange="10"
+                                        Margin="0,8,8,0"
+                                        VerticalAlignment="Center" />
+                                <TextBlock Grid.Row="1"
+                                           Grid.Column="6"
+                                           Text="{Binding Workspace.Data.FilterEndIndex}"
+                                           Foreground="{StaticResource TextBrushTheme}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,8,0,0"
+                                           HorizontalAlignment="Right"
+                                           VerticalAlignment="Center" />
+                            </Grid>
                         </Border>
 
-                        <Border Background="#FF0F172A" CornerRadius="8" Padding="10" Margin="0,10,0,0">
-                            <TextBlock Text="Выберите строку справа, двигайте ползунок или ограничьте диапазон — карта и графики синхронно покажут только нужный участок маршрута."
-                                       Foreground="#FFE5E7EB" FontSize="13" TextWrapping="Wrap" />
+                        <Border Style="{StaticResource OverlayCardStyle}"
+                                Padding="10,9"
+                                Margin="0,8,0,0">
+                            <TextBlock Text="Выберите строку справа или используйте playback и диапазон, чтобы синхронно сфокусировать карту, графики и статистику."
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
                         </Border>
                     </StackPanel>
                 </Grid>
             </Border>
 
-            <TabControl Grid.Column="1" Background="#FF1F2937" BorderThickness="0" Padding="8">
+            <TabControl Grid.Column="1"
+                        Background="{StaticResource SurfaceBrush}"
+                        BorderBrush="{StaticResource BorderBrushTheme}"
+                        BorderThickness="1"
+                        Padding="8">
                 <TabItem Header="Точки">
                     <Grid Margin="8">
                         <DataGrid ItemsSource="{Binding Workspace.Data.Points}"
@@ -178,8 +326,8 @@
                                   IsReadOnly="True"
                                   HeadersVisibility="Column"
                                   GridLinesVisibility="Horizontal"
-                                  Background="#FF0F172A"
-                                  Foreground="White"
+                                  Background="{StaticResource SurfaceAltBrush}"
+                                  Foreground="{StaticResource TextBrushTheme}"
                                   BorderThickness="0"
                                   RowHeaderWidth="0">
                             <DataGrid.Columns>
@@ -200,13 +348,13 @@
                 <TabItem Header="Скорость">
                     <Grid Margin="8">
                         <StackPanel>
-                            <TextBlock Text="График скорости (км/ч)" Foreground="White" FontSize="18" Margin="0,0,0,8" />
-                            <Border Background="#FF0F172A" CornerRadius="8" Padding="8">
+                            <TextBlock Text="График скорости (км/ч)" Foreground="{StaticResource TextBrushTheme}" FontSize="18" Margin="0,0,0,8" />
+                            <Border Style="{StaticResource ChartCardStyle}">
                                 <controls:LineChartControl Values="{Binding Workspace.Data.SpeedSeries}"
                                                            SelectedIndex="{Binding Workspace.Selection.PlaybackPosition}"
                                                            Unit="км/ч"
                                                            SeriesLabel="Скорость"
-                                                           LineColorHex="#38BDF8" />
+                                                           LineColorHex="#C65A69" />
                             </Border>
                         </StackPanel>
                     </Grid>
@@ -215,13 +363,13 @@
                 <TabItem Header="Угол наклона">
                     <Grid Margin="8">
                         <StackPanel>
-                            <TextBlock Text="График угла наклона (градусы)" Foreground="White" FontSize="18" Margin="0,0,0,8" />
-                            <Border Background="#FF0F172A" CornerRadius="8" Padding="8">
+                            <TextBlock Text="График угла наклона (градусы)" Foreground="{StaticResource TextBrushTheme}" FontSize="18" Margin="0,0,0,8" />
+                            <Border Style="{StaticResource ChartCardStyle}">
                                 <controls:LineChartControl Values="{Binding Workspace.Data.LeanSeries}"
                                                            SelectedIndex="{Binding Workspace.Selection.PlaybackPosition}"
                                                            Unit="°"
                                                            SeriesLabel="Наклон"
-                                                           LineColorHex="#A78BFA" />
+                                                           LineColorHex="#9E5662" />
                             </Border>
                         </StackPanel>
                     </Grid>
@@ -230,8 +378,8 @@
                 <TabItem Header="Ускорения XYZ">
                     <Grid Margin="8">
                         <StackPanel>
-                            <TextBlock Text="График ускорений X / Y / Z" Foreground="White" FontSize="18" Margin="0,0,0,8" />
-                            <Border Background="#FF0F172A" CornerRadius="8" Padding="8">
+                            <TextBlock Text="График ускорений X / Y / Z" Foreground="{StaticResource TextBrushTheme}" FontSize="18" Margin="0,0,0,8" />
+                            <Border Style="{StaticResource ChartCardStyle}">
                                 <controls:MultiLineChartControl Series="{Binding Workspace.Data.AccelSeries}"
                                                                 SelectedIndex="{Binding Workspace.Selection.PlaybackPosition}"
                                                                 Unit="ед." />
@@ -243,42 +391,42 @@
                 <TabItem Header="Статистика">
                     <Grid Margin="8">
                         <StackPanel>
-                            <TextBlock Text="Сводка маршрута / диапазона" Foreground="White" FontSize="20" Margin="0,0,0,12" />
+                            <TextBlock Text="Сводка маршрута / диапазона" Foreground="{StaticResource TextBrushTheme}" FontSize="20" Margin="0,0,0,12" />
                             <UniformGrid Columns="2">
-                                <Border Margin="4" Padding="12" Background="#FF0F172A" CornerRadius="8">
+                                <Border Style="{StaticResource MetricCardStyle}">
                                     <StackPanel>
-                                        <TextBlock Text="Количество точек" Foreground="#FF94A3B8" />
-                                        <TextBlock Text="{Binding Workspace.Data.Statistics.PointCount}" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+                                        <TextBlock Text="Количество точек" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.PointCount}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
-                                <Border Margin="4" Padding="12" Background="#FF0F172A" CornerRadius="8">
+                                <Border Style="{StaticResource MetricCardStyle}">
                                     <StackPanel>
-                                        <TextBlock Text="Дистанция, м" Foreground="#FF94A3B8" />
-                                        <TextBlock Text="{Binding Workspace.Data.Statistics.TotalDistanceMeters, StringFormat=F1}" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+                                        <TextBlock Text="Дистанция, м" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.TotalDistanceMeters, StringFormat=F1}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
-                                <Border Margin="4" Padding="12" Background="#FF0F172A" CornerRadius="8">
+                                <Border Style="{StaticResource MetricCardStyle}">
                                     <StackPanel>
-                                        <TextBlock Text="Средняя скорость" Foreground="#FF94A3B8" />
-                                        <TextBlock Text="{Binding Workspace.Data.Statistics.AverageSpeedKmh, StringFormat=F1}" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+                                        <TextBlock Text="Средняя скорость" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.AverageSpeedKmh, StringFormat=F1}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
-                                <Border Margin="4" Padding="12" Background="#FF0F172A" CornerRadius="8">
+                                <Border Style="{StaticResource MetricCardStyle}">
                                     <StackPanel>
-                                        <TextBlock Text="Макс. скорость" Foreground="#FF94A3B8" />
-                                        <TextBlock Text="{Binding Workspace.Data.Statistics.MaxSpeedKmh, StringFormat=F1}" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+                                        <TextBlock Text="Макс. скорость" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.MaxSpeedKmh, StringFormat=F1}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
-                                <Border Margin="4" Padding="12" Background="#FF0F172A" CornerRadius="8">
+                                <Border Style="{StaticResource MetricCardStyle}">
                                     <StackPanel>
-                                        <TextBlock Text="Мин. угол" Foreground="#FF94A3B8" />
-                                        <TextBlock Text="{Binding Workspace.Data.Statistics.MinLeanDeg, StringFormat=F1}" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+                                        <TextBlock Text="Мин. угол" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.MinLeanDeg, StringFormat=F1}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
-                                <Border Margin="4" Padding="12" Background="#FF0F172A" CornerRadius="8">
+                                <Border Style="{StaticResource MetricCardStyle}">
                                     <StackPanel>
-                                        <TextBlock Text="Макс. угол" Foreground="#FF94A3B8" />
-                                        <TextBlock Text="{Binding Workspace.Data.Statistics.MaxLeanDeg, StringFormat=F1}" Foreground="White" FontSize="24" FontWeight="SemiBold" />
+                                        <TextBlock Text="Макс. угол" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.MaxLeanDeg, StringFormat=F1}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
                             </UniformGrid>
@@ -288,8 +436,16 @@
             </TabControl>
         </Grid>
 
-        <Border Grid.Row="2" Background="#FF1F2937" CornerRadius="10" Padding="10" Margin="0,12,0,0">
-            <TextBlock Text="{Binding Workspace.Data.StatusText}" Foreground="#FFE5E7EB" FontSize="14" />
+        <Border Grid.Row="2"
+                Background="{StaticResource SurfaceBrush}"
+                BorderBrush="{StaticResource BorderBrushTheme}"
+                BorderThickness="1"
+                CornerRadius="12"
+                Padding="10"
+                Margin="0,12,0,0">
+            <TextBlock Text="{Binding Workspace.Data.StatusText}"
+                       Foreground="{StaticResource TextBrushTheme}"
+                       FontSize="13" />
         </Border>
     </Grid>
 </Window>
