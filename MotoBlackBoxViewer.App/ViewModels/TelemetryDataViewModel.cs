@@ -103,6 +103,7 @@ public sealed class TelemetryDataViewModel : ObservableObject
         _state.FilterEndIndex = _state.AllPoints.Count;
 
         RaiseSourceDataProperties();
+        RebuildVisibleData(preferredPoint: null, updateStatus: false);
     }
 
     public void Clear()
@@ -170,6 +171,16 @@ public sealed class TelemetryDataViewModel : ObservableObject
             RaisePropertyChanged(nameof(FilterEndIndex));
         }
 
+        return RebuildVisibleData(preferredPoint, updateStatus);
+    }
+
+    private TelemetryPoint? RebuildVisibleData(TelemetryPoint? preferredPoint, bool updateStatus)
+    {
+        if (!HasSourceData)
+            return null;
+
+        int start = _state.FilterStartIndex;
+        int end = _state.FilterEndIndex;
         TelemetryVisibleData visibleData = _dataProcessor.CreateVisibleData(_state.AllPoints, start, end);
         _state.VisiblePoints.ReplaceAll(visibleData.Points);
         ApplyVisibleData(visibleData);

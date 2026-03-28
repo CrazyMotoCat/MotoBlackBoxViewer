@@ -53,6 +53,50 @@ public sealed class SessionPersistenceCoordinatorTests
         Assert.Equal(9, snapshot.SelectedVisiblePosition);
     }
 
+    [Fact]
+    public async Task Save_WhenBackgroundWriteFails_ReportsErrorWithoutThrowing()
+    {
+        var settingsService = new ThrowingAppSettingsService();
+        Exception? reportedError = null;
+        var coordinator = new SessionPersistenceCoordinator(
+            settingsService,
+            TimeSpan.FromMilliseconds(20),
+            errorHandler: ex => reportedError = ex);
+        var state = new TelemetrySessionState
+        {
+            CurrentFilePath = "ride.csv",
+            PlaybackPosition = 2
+        };
+
+        coordinator.Save(state, "1x", includeSelectedPosition: true);
+
+        await Task.Delay(100);
+
+        Assert.NotNull(reportedError);
+        Assert.IsType<IOException>(reportedError);
+    }
+
+    [Fact]
+    public void Flush_WhenWriteFails_ReportsErrorWithoutThrowing()
+    {
+        var settingsService = new ThrowingAppSettingsService();
+        Exception? reportedError = null;
+        var coordinator = new SessionPersistenceCoordinator(
+            settingsService,
+            errorHandler: ex => reportedError = ex);
+        var state = new TelemetrySessionState
+        {
+            CurrentFilePath = "ride.csv",
+            PlaybackPosition = 9
+        };
+
+        var exception = Record.Exception(() => coordinator.Flush(state, "1x", includeSelectedPosition: true));
+
+        Assert.Null(exception);
+        Assert.NotNull(reportedError);
+        Assert.IsType<IOException>(reportedError);
+    }
+
     private sealed class RecordingAppSettingsService : IAppSettingsService
     {
         public List<AppSessionSettings> SavedSnapshots { get; } = [];
@@ -70,5 +114,13 @@ public sealed class SessionPersistenceCoordinatorTests
                 SelectedVisiblePosition = settings.SelectedVisiblePosition
             });
         }
+    }
+
+    private sealed class ThrowingAppSettingsService : IAppSettingsService
+    {
+        public AppSessionSettings Load() => new();
+
+        public void Save(AppSessionSettings settings)
+            => throw new IOException("Disk full.");
     }
 }

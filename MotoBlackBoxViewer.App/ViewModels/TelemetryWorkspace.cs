@@ -98,6 +98,8 @@ public sealed class TelemetryWorkspace : ObservableObject, IDisposable
         Data.PropertyChanged -= Data_PropertyChanged;
         Selection.PropertyChanged -= Selection_PropertyChanged;
         Playback.PropertyChanged -= Playback_PropertyChanged;
+        Map.Dispose();
+        Selection.Dispose();
         Playback.Dispose();
     }
 }

@@ -6,10 +6,11 @@ using MotoBlackBoxViewer.Core.Models;
 
 namespace MotoBlackBoxViewer.App.ViewModels;
 
-public sealed class TelemetrySelectionViewModel : ObservableObject
+public sealed class TelemetrySelectionViewModel : ObservableObject, IDisposable
 {
     private readonly TelemetryDataViewModel _data;
     private readonly TelemetrySessionState _state;
+    private bool _isDisposed;
 
     public TelemetrySelectionViewModel(TelemetryDataViewModel data, TelemetrySessionState state)
     {
@@ -166,5 +167,15 @@ public sealed class TelemetrySelectionViewModel : ObservableObject
         RaisePropertyChanged(nameof(PlaybackMaximum));
         RaisePropertyChanged(nameof(PlaybackPosition));
         RaisePropertyChanged(nameof(PlaybackSummary));
+    }
+
+    public void Dispose()
+    {
+        if (_isDisposed)
+            return;
+
+        _isDisposed = true;
+        _data.PropertyChanged -= Data_PropertyChanged;
+        _data.Points.CollectionChanged -= Points_CollectionChanged;
     }
 }

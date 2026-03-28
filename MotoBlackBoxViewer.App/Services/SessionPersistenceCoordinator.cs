@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using MotoBlackBoxViewer.App.Interfaces;
 using MotoBlackBoxViewer.App.Models;
 
@@ -9,14 +10,19 @@ public sealed class SessionPersistenceCoordinator : ISessionPersistenceCoordinat
 
     private readonly IAppSettingsService _settingsService;
     private readonly TimeSpan _saveDelay;
+    private readonly Action<Exception>? _errorHandler;
     private readonly object _syncRoot = new();
     private AppSessionSettings? _pendingSnapshot;
     private CancellationTokenSource? _saveCts;
 
-    public SessionPersistenceCoordinator(IAppSettingsService settingsService, TimeSpan? saveDelay = null)
+    public SessionPersistenceCoordinator(
+        IAppSettingsService settingsService,
+        TimeSpan? saveDelay = null,
+        Action<Exception>? errorHandler = null)
     {
         _settingsService = settingsService;
         _saveDelay = saveDelay ?? DefaultSaveDelay;
+        _errorHandler = errorHandler;
     }
 
     public AppSessionSettings Load() => _settingsService.Load();
@@ -41,7 +47,7 @@ public sealed class SessionPersistenceCoordinator : ISessionPersistenceCoordinat
 
         saveCts?.Cancel();
         saveCts?.Dispose();
-        _settingsService.Save(snapshot);
+        TrySaveSnapshot(snapshot);
     }
 
     private AppSessionSettings CreateSnapshot(TelemetrySessionState state, string selectedPlaybackSpeedLabel, bool includeSelectedPosition)
@@ -94,14 +100,36 @@ public sealed class SessionPersistenceCoordinator : ISessionPersistenceCoordinat
             }
 
             if (shouldSave)
-                _settingsService.Save(snapshotToSave!);
+                TrySaveSnapshot(snapshotToSave!);
         }
         catch (OperationCanceledException)
         {
+        }
+        catch (Exception ex)
+        {
+            ReportSaveError(ex);
         }
         finally
         {
             saveCts.Dispose();
         }
+    }
+
+    private void TrySaveSnapshot(AppSessionSettings snapshot)
+    {
+        try
+        {
+            _settingsService.Save(snapshot);
+        }
+        catch (Exception ex)
+        {
+            ReportSaveError(ex);
+        }
+    }
+
+    private void ReportSaveError(Exception exception)
+    {
+        Trace.TraceError($"Failed to save session settings: {exception}");
+        _errorHandler?.Invoke(exception);
     }
 }

@@ -6,13 +6,14 @@ using MotoBlackBoxViewer.Core.Models;
 
 namespace MotoBlackBoxViewer.App.ViewModels;
 
-public sealed class TelemetryMapViewModel : ObservableObject
+public sealed class TelemetryMapViewModel : ObservableObject, IDisposable
 {
     private readonly TelemetryDataViewModel _data;
     private readonly TelemetrySelectionViewModel _selection;
     private readonly IMapExportService _mapExportService;
     private readonly TelemetrySessionState _state;
     private string _routeJson = "[]";
+    private bool _isDisposed;
 
     public TelemetryMapViewModel(
         TelemetryDataViewModel data,
@@ -83,5 +84,15 @@ public sealed class TelemetryMapViewModel : ObservableObject
 
         _routeJson = nextRouteJson;
         RaisePropertyChanged(nameof(RouteJson));
+    }
+
+    public void Dispose()
+    {
+        if (_isDisposed)
+            return;
+
+        _isDisposed = true;
+        _data.PropertyChanged -= Data_PropertyChanged;
+        _selection.PropertyChanged -= Selection_PropertyChanged;
     }
 }
