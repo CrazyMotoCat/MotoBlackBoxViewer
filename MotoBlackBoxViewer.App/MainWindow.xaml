@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        xmlns:controls="clr-namespace:MotoBlackBoxViewer.App.Controls"
         mc:Ignorable="d"
         Title="Moto Black Box Viewer"
         Height="950"
@@ -21,11 +21,11 @@
         <Border Grid.Row="0" Background="#FF1F2937" CornerRadius="10" Padding="12" Margin="0,0,0,12">
             <DockPanel LastChildFill="True">
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
-                    <Button Content="Открыть CSV" Width="130" Height="36" Margin="0,0,8,0" Click="OpenCsv_Click" />
-                    <Button Content="Обновить карту" Width="130" Height="36" Margin="0,0,8,0" Click="RefreshMap_Click" />
-                    <Button Content="Открыть в браузере" Width="150" Height="36" Margin="0,0,8,0" Click="OpenMap_Click" />
-                    <Button Content="Сброс диапазона" Width="140" Height="36" Margin="0,0,8,0" Click="ResetFilter_Click" />
-                    <Button Content="Очистить" Width="110" Height="36" Click="Clear_Click" />
+                    <Button Content="Открыть CSV" Width="130" Height="36" Margin="0,0,8,0" Command="{Binding OpenCsvCommand}" />
+                    <Button Content="Обновить карту" Width="130" Height="36" Margin="0,0,8,0" Command="{Binding RefreshMapCommand}" />
+                    <Button Content="Открыть в браузере" Width="150" Height="36" Margin="0,0,8,0" Command="{Binding OpenMapCommand}" />
+                    <Button Content="Сброс диапазона" Width="140" Height="36" Margin="0,0,8,0" Command="{Binding ResetFilterCommand}" />
+                    <Button Content="Очистить" Width="110" Height="36" Command="{Binding ClearCommand}" />
                 </StackPanel>
 
                 <StackPanel Orientation="Vertical" HorizontalAlignment="Right">
@@ -51,9 +51,10 @@
 
                     <TextBlock Text="Карта маршрута" Foreground="White" FontSize="20" FontWeight="SemiBold" Margin="0,0,0,12" />
 
-                    <Border Grid.Row="1" Background="#FF0F172A" CornerRadius="8" BorderBrush="#FF334155" BorderThickness="1" ClipToBounds="True">
-                        <wv2:WebView2 x:Name="MapWebView" NavigationCompleted="MapWebView_NavigationCompleted" />
-                    </Border>
+                    <controls:MapViewControl Grid.Row="1"
+                                             RouteJson="{Binding RouteJson}"
+                                             SelectedPointIndex="{Binding SelectedPointIndex}"
+                                             RefreshVersion="{Binding MapRefreshVersion}" />
 
                     <StackPanel Grid.Row="2" Margin="0,12,0,0">
                         <Border Background="#FF0F172A" CornerRadius="8" Padding="10">
@@ -70,11 +71,11 @@
                                     </Grid.ColumnDefinitions>
 
                                     <Button Grid.Column="0" Content="◀" Width="42" Height="34" Margin="0,0,8,0"
-                                            IsEnabled="{Binding HasPoints}" Click="PrevPoint_Click" />
-                                    <Button Grid.Column="1" x:Name="PlayPauseButton" Content="▶ Пуск" Width="92" Height="34" Margin="0,0,8,0"
-                                            IsEnabled="{Binding HasPoints}" Click="PlayPause_Click" />
+                                            IsEnabled="{Binding HasPoints}" Command="{Binding PrevPointCommand}" />
+                                    <Button Grid.Column="1" Content="{Binding PlaybackButtonText}" Width="92" Height="34" Margin="0,0,8,0"
+                                            IsEnabled="{Binding HasPoints}" Command="{Binding TogglePlaybackCommand}" />
                                     <Button Grid.Column="2" Content="▶" Width="42" Height="34" Margin="0,0,12,0"
-                                            IsEnabled="{Binding HasPoints}" Click="NextPoint_Click" />
+                                            IsEnabled="{Binding HasPoints}" Command="{Binding NextPointCommand}" />
 
                                     <Slider Grid.Column="3"
                                             Minimum="{Binding PlaybackMinimum}"
@@ -113,7 +114,7 @@
                             <StackPanel>
                                 <DockPanel LastChildFill="True">
                                     <TextBlock Text="Фильтр диапазона точек" Foreground="White" FontSize="15" FontWeight="SemiBold" DockPanel.Dock="Left" />
-                                    <Button Content="Сбросить" Width="90" Height="28" DockPanel.Dock="Right" Click="ResetFilter_Click" />
+                                    <Button Content="Сбросить" Width="90" Height="28" DockPanel.Dock="Right" Command="{Binding ResetFilterCommand}" />
                                 </DockPanel>
 
                                 <Grid Margin="0,10,0,0">
@@ -201,7 +202,11 @@
                         <StackPanel>
                             <TextBlock Text="График скорости (км/ч)" Foreground="White" FontSize="18" Margin="0,0,0,8" />
                             <Border Background="#FF0F172A" CornerRadius="8" Padding="8">
-                                <Canvas x:Name="SpeedChartCanvas" Height="300" SizeChanged="ChartCanvas_SizeChanged" />
+                                <controls:LineChartControl Values="{Binding SpeedSeries}"
+                                                           SelectedIndex="{Binding PlaybackPosition}"
+                                                           Unit="км/ч"
+                                                           SeriesLabel="Скорость"
+                                                           LineColorHex="#38BDF8" />
                             </Border>
                         </StackPanel>
                     </Grid>
@@ -212,7 +217,11 @@
                         <StackPanel>
                             <TextBlock Text="График угла наклона (градусы)" Foreground="White" FontSize="18" Margin="0,0,0,8" />
                             <Border Background="#FF0F172A" CornerRadius="8" Padding="8">
-                                <Canvas x:Name="LeanChartCanvas" Height="300" SizeChanged="ChartCanvas_SizeChanged" />
+                                <controls:LineChartControl Values="{Binding LeanSeries}"
+                                                           SelectedIndex="{Binding PlaybackPosition}"
+                                                           Unit="°"
+                                                           SeriesLabel="Наклон"
+                                                           LineColorHex="#A78BFA" />
                             </Border>
                         </StackPanel>
                     </Grid>
@@ -223,7 +232,9 @@
                         <StackPanel>
                             <TextBlock Text="График ускорений X / Y / Z" Foreground="White" FontSize="18" Margin="0,0,0,8" />
                             <Border Background="#FF0F172A" CornerRadius="8" Padding="8">
-                                <Canvas x:Name="AccelChartCanvas" Height="320" SizeChanged="ChartCanvas_SizeChanged" />
+                                <controls:MultiLineChartControl Series="{Binding AccelSeries}"
+                                                                SelectedIndex="{Binding PlaybackPosition}"
+                                                                Unit="ед." />
                             </Border>
                         </StackPanel>
                     </Grid>

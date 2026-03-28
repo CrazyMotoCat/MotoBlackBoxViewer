@@ -1,4 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Windows.Input;
+using MotoBlackBoxViewer.App.Controls;
+using MotoBlackBoxViewer.App.Models;
 using MotoBlackBoxViewer.App.Helpers;
 using MotoBlackBoxViewer.App.Services;
 using MotoBlackBoxViewer.Core.Models;
@@ -11,6 +14,8 @@ public sealed class MainViewModel : ObservableObject
     private readonly CsvTelemetryReader _reader = new();
     private readonly TelemetryAnalyzer _analyzer = new();
     private readonly MapExportService _mapExportService = new();
+    private readonly FileDialogService _fileDialogService = new();
+    private readonly PlaybackService _playbackService = new();
     private readonly List<TelemetryPoint> _allPoints = new();
 
     private string _statusText = "Готово. Откройте CSV-файл.";
@@ -21,6 +26,8 @@ public sealed class MainViewModel : ObservableObject
     private int _filterStartIndex;
     private int _filterEndIndex;
     private PlaybackSpeedOption _selectedPlaybackSpeed;
+    private bool _isPlaybackRunning;
+    private int _mapRefreshVersion;
 
     public MainViewModel()
     {
@@ -34,11 +41,39 @@ public sealed class MainViewModel : ObservableObject
         };
 
         _selectedPlaybackSpeed = PlaybackSpeedOptions[2];
+        _playbackService.SetInterval(TimeSpan.FromMilliseconds(PlaybackIntervalMilliseconds));
+        _playbackService.Tick += PlaybackService_Tick;
+
+        OpenCsvCommand = new AsyncRelayCommand(OpenCsvFromDialogAsync);
+        RefreshMapCommand = new RelayCommand(RequestMapRefresh);
+        OpenMapCommand = new RelayCommand(OpenMapInBrowser, () => HasPoints);
+        ClearCommand = new RelayCommand(Clear);
+        ResetFilterCommand = new RelayCommand(ResetFilter, () => HasSourceData);
+        PrevPointCommand = new RelayCommand(() =>
+        {
+            StopPlayback(updateStatus: false);
+            MoveSelection(-1);
+        }, () => HasPoints);
+        NextPointCommand = new RelayCommand(() =>
+        {
+            StopPlayback(updateStatus: false);
+            MoveSelection(1);
+        }, () => HasPoints);
+        TogglePlaybackCommand = new RelayCommand(TogglePlayback, () => HasPoints);
     }
 
     public ObservableCollection<TelemetryPoint> Points { get; } = new();
 
     public IReadOnlyList<PlaybackSpeedOption> PlaybackSpeedOptions { get; }
+
+    public ICommand OpenCsvCommand { get; }
+    public ICommand RefreshMapCommand { get; }
+    public ICommand OpenMapCommand { get; }
+    public ICommand ClearCommand { get; }
+    public ICommand ResetFilterCommand { get; }
+    public ICommand PrevPointCommand { get; }
+    public ICommand NextPointCommand { get; }
+    public ICommand TogglePlaybackCommand { get; }
 
     public string StatusText
     {
@@ -58,6 +93,16 @@ public sealed class MainViewModel : ObservableObject
     {
         get => _selectedPoint;
         set => SetSelectedPoint(value, syncPlayback: true);
+    }
+
+    public int? SelectedPointIndex => SelectedPoint?.Index;
+
+    public string RouteJson => _mapExportService.BuildRouteJson(Points);
+
+    public int MapRefreshVersion
+    {
+        get => _mapRefreshVersion;
+        private set => SetProperty(ref _mapRefreshVersion, value);
     }
 
     public string SelectedPointSummary
@@ -84,6 +129,13 @@ public sealed class MainViewModel : ObservableObject
     public IReadOnlyList<double> AccelYSeries => Points.Select(p => p.AccelY).ToArray();
     public IReadOnlyList<double> AccelZSeries => Points.Select(p => p.AccelZ).ToArray();
 
+    public IReadOnlyList<ChartSeriesDefinition> AccelSeries =>
+    [
+        new ChartSeriesDefinition("Accel X", AccelXSeries, "#22C55E"),
+        new ChartSeriesDefinition("Accel Y", AccelYSeries, "#F59E0B"),
+        new ChartSeriesDefinition("Accel Z", AccelZSeries, "#EF4444")
+    ];
+
     public int PlaybackMinimum => HasPoints ? 1 : 0;
     public int PlaybackMaximum => Points.Count;
 
@@ -92,6 +144,18 @@ public sealed class MainViewModel : ObservableObject
         get => _playbackPosition;
         set => SetPlaybackPosition(value, syncSelectedPoint: true);
     }
+
+    public bool IsPlaybackRunning
+    {
+        get => _isPlaybackRunning;
+        private set
+        {
+            if (SetProperty(ref _isPlaybackRunning, value))
+                RaisePropertyChanged(nameof(PlaybackButtonText));
+        }
+    }
+
+    public string PlaybackButtonText => IsPlaybackRunning ? "❚❚ Пауза" : "▶ Пуск";
 
     public string PlaybackSummary
     {
@@ -156,8 +220,11 @@ public sealed class MainViewModel : ObservableObject
 
             if (SetProperty(ref _selectedPlaybackSpeed, value))
             {
+                _playbackService.SetInterval(TimeSpan.FromMilliseconds(PlaybackIntervalMilliseconds));
                 RaisePropertyChanged(nameof(PlaybackSpeedSummary));
                 RaisePropertyChanged(nameof(PlaybackIntervalMilliseconds));
+                if (IsPlaybackRunning)
+                    StatusText = $"Скорость воспроизведения изменена: {SelectedPlaybackSpeed.Label}.";
             }
         }
     }
@@ -165,6 +232,24 @@ public sealed class MainViewModel : ObservableObject
     public string PlaybackSpeedSummary => $"Скорость: {SelectedPlaybackSpeed.Label}";
 
     public int PlaybackIntervalMilliseconds => (int)Math.Round(350d / SelectedPlaybackSpeed.Multiplier);
+
+    private async Task OpenCsvFromDialogAsync()
+    {
+        string? filePath = _fileDialogService.PickCsvFile();
+        if (string.IsNullOrWhiteSpace(filePath))
+            return;
+
+        try
+        {
+            StopPlayback(updateStatus: false);
+            await LoadCsvAsync(filePath);
+            RequestMapRefresh();
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Ошибка загрузки CSV: {ex.Message}";
+        }
+    }
 
     public async Task LoadCsvAsync(string filePath, CancellationToken cancellationToken = default)
     {
@@ -191,6 +276,8 @@ public sealed class MainViewModel : ObservableObject
 
     public void Clear()
     {
+        StopPlayback(updateStatus: false);
+
         _allPoints.Clear();
         Points.Clear();
         _currentFilePath = null;
@@ -207,6 +294,7 @@ public sealed class MainViewModel : ObservableObject
         RaisePropertyChanged(nameof(FilterSummary));
 
         SetSelectedPoint(null, syncPlayback: true);
+        RequestMapRefresh();
         StatusText = "Данные очищены.";
     }
 
@@ -215,6 +303,7 @@ public sealed class MainViewModel : ObservableObject
         if (!HasSourceData)
             return;
 
+        StopPlayback(updateStatus: false);
         _filterStartIndex = 1;
         _filterEndIndex = _allPoints.Count;
         RaisePropertyChanged(nameof(FilterStartIndex));
@@ -237,10 +326,6 @@ public sealed class MainViewModel : ObservableObject
         return changed;
     }
 
-    public string GetRouteJson() => _mapExportService.BuildRouteJson(Points);
-
-    public string GetMapTemplatePath() => _mapExportService.GetTemplatePath();
-
     public string ExportMapHtml()
     {
         if (Points.Count == 0)
@@ -262,8 +347,67 @@ public sealed class MainViewModel : ObservableObject
         _mapExportService.OpenInBrowser(htmlPath);
     }
 
+    public void RequestMapRefresh() => MapRefreshVersion++;
+
+    private void TogglePlayback()
+    {
+        if (!HasPoints)
+            return;
+
+        if (IsPlaybackRunning)
+        {
+            StopPlayback();
+            return;
+        }
+
+        StartPlayback();
+    }
+
+    private void StartPlayback()
+    {
+        if (!HasPoints)
+            return;
+
+        _playbackService.SetInterval(TimeSpan.FromMilliseconds(PlaybackIntervalMilliseconds));
+
+        if (PlaybackPosition >= PlaybackMaximum)
+            SelectPointByIndex(1);
+
+        _playbackService.Start();
+        IsPlaybackRunning = true;
+        StatusText = $"Воспроизведение маршрута запущено ({SelectedPlaybackSpeed.Label}).";
+    }
+
+    private void StopPlayback(bool updateStatus = true)
+    {
+        if (!_playbackService.IsRunning)
+        {
+            IsPlaybackRunning = false;
+            return;
+        }
+
+        _playbackService.Stop();
+        IsPlaybackRunning = false;
+        if (updateStatus)
+            StatusText = "Воспроизведение остановлено.";
+    }
+
+    private void PlaybackService_Tick(object? sender, EventArgs e)
+    {
+        if (!HasPoints)
+        {
+            StopPlayback(updateStatus: false);
+            return;
+        }
+
+        bool moved = MoveSelection(1);
+        if (!moved || PlaybackPosition >= PlaybackMaximum)
+            StopPlayback(updateStatus: false);
+    }
+
     private void ApplyFilter(bool preserveSelection, bool updateStatus)
     {
+        StopPlayback(updateStatus: false);
         TelemetryPoint? preferredPoint = preserveSelection ? SelectedPoint : null;
 
         Points.Clear();
@@ -273,6 +417,7 @@ public sealed class MainViewModel : ObservableObject
             Statistics = new TelemetryStatistics();
             RaiseCollectionDependentProperties();
             SetSelectedPoint(null, syncPlayback: true);
+            RequestMapRefresh();
             return;
         }
 
@@ -308,6 +453,7 @@ public sealed class MainViewModel : ObservableObject
         nextPoint ??= Points.FirstOrDefault();
         SetSelectedPoint(nextPoint, syncPlayback: true);
         RaisePropertyChanged(nameof(FilterSummary));
+        RequestMapRefresh();
 
         if (updateStatus)
             StatusText = $"Применен диапазон #{FilterStartIndex}–#{FilterEndIndex}. Показано {Points.Count} точек.";
@@ -322,10 +468,22 @@ public sealed class MainViewModel : ObservableObject
         RaisePropertyChanged(nameof(AccelXSeries));
         RaisePropertyChanged(nameof(AccelYSeries));
         RaisePropertyChanged(nameof(AccelZSeries));
+        RaisePropertyChanged(nameof(AccelSeries));
+        RaisePropertyChanged(nameof(RouteJson));
         RaisePropertyChanged(nameof(PlaybackMinimum));
         RaisePropertyChanged(nameof(PlaybackMaximum));
         RaisePropertyChanged(nameof(PlaybackSummary));
         RaisePropertyChanged(nameof(SelectedPointSummary));
+        RaiseCommandCanExecuteChanged();
+    }
+
+    private void RaiseCommandCanExecuteChanged()
+    {
+        (OpenMapCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (ResetFilterCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (PrevPointCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (NextPointCommand as RelayCommand)?.RaiseCanExecuteChanged();
+        (TogglePlaybackCommand as RelayCommand)?.RaiseCanExecuteChanged();
     }
 
     private int NormalizeFilterValue(int value, bool fallbackToMaximum)
@@ -349,6 +507,7 @@ public sealed class MainViewModel : ObservableObject
 
         RaisePropertyChanged(nameof(SelectedPointSummary));
         RaisePropertyChanged(nameof(PlaybackSummary));
+        RaisePropertyChanged(nameof(SelectedPointIndex));
 
         if (syncPlayback)
         {
