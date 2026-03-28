@@ -22,10 +22,8 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = _viewModel;
 
-        _playbackTimer = new DispatcherTimer
-        {
-            Interval = TimeSpan.FromMilliseconds(350)
-        };
+        _playbackTimer = new DispatcherTimer();
+        UpdatePlaybackTimerInterval();
         _playbackTimer.Tick += PlaybackTimer_Tick;
 
         Loaded += MainWindow_Loaded;
@@ -123,6 +121,14 @@ public partial class MainWindow : Window
         await ClearMapAsync();
     }
 
+    private async void ResetFilter_Click(object sender, RoutedEventArgs e)
+    {
+        StopPlayback();
+        _viewModel.ResetFilter();
+        RedrawCharts();
+        await SyncMapAsync();
+    }
+
     private void PrevPoint_Click(object sender, RoutedEventArgs e)
     {
         StopPlayback();
@@ -164,12 +170,14 @@ public partial class MainWindow : Window
         if (!_viewModel.HasPoints)
             return;
 
+        UpdatePlaybackTimerInterval();
+
         if (_viewModel.PlaybackPosition >= _viewModel.PlaybackMaximum)
             _viewModel.SelectPointByIndex(1);
 
         _playbackTimer.Start();
         UpdatePlaybackButtonState();
-        _viewModel.StatusText = "Воспроизведение маршрута запущено.";
+        _viewModel.StatusText = $"Воспроизведение маршрута запущено ({_viewModel.SelectedPlaybackSpeed.Label}).";
     }
 
     private void StopPlayback()
@@ -181,6 +189,11 @@ public partial class MainWindow : Window
         }
 
         UpdatePlaybackButtonState();
+    }
+
+    private void UpdatePlaybackTimerInterval()
+    {
+        _playbackTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(50, _viewModel.PlaybackIntervalMilliseconds));
     }
 
     private void UpdatePlaybackButtonState()
@@ -207,6 +220,18 @@ public partial class MainWindow : Window
         {
             UpdatePlaybackButtonState();
         }
+        else if (e.PropertyName == nameof(MainViewModel.FilterSummary))
+        {
+            StopPlayback();
+            RedrawCharts();
+            _ = SyncMapAsync();
+        }
+        else if (e.PropertyName == nameof(MainViewModel.SelectedPlaybackSpeed))
+        {
+            UpdatePlaybackTimerInterval();
+            if (_playbackTimer.IsEnabled)
+                _viewModel.StatusText = $"Скорость воспроизведения изменена: {_viewModel.SelectedPlaybackSpeed.Label}.";
+        }
     }
 
     private void ChartCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -216,7 +241,7 @@ public partial class MainWindow : Window
 
     private void RedrawCharts()
     {
-        int? selectedIndex = _viewModel.SelectedPoint?.Index;
+        int? selectedIndex = _viewModel.SelectedPoint is null ? null : _viewModel.PlaybackPosition;
 
         DrawSeries(
             SpeedChartCanvas,
@@ -260,7 +285,7 @@ public partial class MainWindow : Window
         string json = _viewModel.GetRouteJson();
         await MapWebView.ExecuteScriptAsync($"window.setRouteData({json});");
         await SyncSelectedPointAsync();
-        _viewModel.StatusText = $"Карта обновлена. Точек на маршруте: {_viewModel.Points.Count}.";
+        _viewModel.StatusText = $"Карта обновлена. Точек в текущем диапазоне: {_viewModel.Points.Count}.";
     }
 
     private async Task SyncSelectedPointAsync()
@@ -401,7 +426,7 @@ public partial class MainWindow : Window
 
         AddLabel(canvas, $"max: {max.ToString("F1", CultureInfo.InvariantCulture)} {unit}", marginLeft, 0, palette.TextBrush);
         AddLabel(canvas, $"min: {min.ToString("F1", CultureInfo.InvariantCulture)} {unit}", marginLeft + 170, 0, palette.TextBrush);
-        AddLabel(canvas, $"точек: {pointCount}", width - 110, 0, palette.TextBrush);
+        AddLabel(canvas, $"точек: {pointCount}", Math.Max(marginLeft, width - 110), 0, palette.TextBrush);
         AddLabel(canvas, min.ToString("F1", CultureInfo.InvariantCulture), 4, marginTop + plotHeight - 12, palette.TextBrush);
         AddLabel(canvas, max.ToString("F1", CultureInfo.InvariantCulture), 4, marginTop - 8, palette.TextBrush);
     }

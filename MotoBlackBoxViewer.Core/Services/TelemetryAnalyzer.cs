@@ -9,10 +9,14 @@ public sealed class TelemetryAnalyzer
         if (points.Count == 0)
             return new TelemetryStatistics();
 
+        double startDistance = points[0].DistanceFromStartMeters;
+        double endDistance = points[^1].DistanceFromStartMeters;
+        double totalDistance = Math.Max(0, endDistance - startDistance);
+
         return new TelemetryStatistics
         {
             PointCount = points.Count,
-            TotalDistanceMeters = points[^1].DistanceFromStartMeters,
+            TotalDistanceMeters = totalDistance,
             AverageSpeedKmh = points.Average(p => p.SpeedKmh),
             MaxSpeedKmh = points.Max(p => p.SpeedKmh),
             MinLeanDeg = points.Min(p => p.LeanAngleDeg),

@@ -40,4 +40,20 @@ public sealed class TelemetryAnalyzerTests
         Assert.Equal(-2.0, stats.MinLeanDeg, 3);
         Assert.Equal(3.0, stats.MaxLeanDeg, 3);
     }
+
+    [Fact]
+    public void Analyze_UsesRelativeDistance_ForFilteredRange()
+    {
+        var analyzer = new TelemetryAnalyzer();
+        var points = new[]
+        {
+            new TelemetryPoint { Index = 5, SpeedKmh = 42, LeanAngleDeg = 8.0, DistanceFromStartMeters = 100 },
+            new TelemetryPoint { Index = 6, SpeedKmh = 46, LeanAngleDeg = 6.0, DistanceFromStartMeters = 132.4 },
+            new TelemetryPoint { Index = 7, SpeedKmh = 48, LeanAngleDeg = 4.0, DistanceFromStartMeters = 155.9 }
+        };
+
+        var stats = analyzer.Analyze(points);
+
+        Assert.Equal(55.9, stats.TotalDistanceMeters, 3);
+    }
 }
