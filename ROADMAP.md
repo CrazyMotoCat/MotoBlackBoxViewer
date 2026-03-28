@@ -213,6 +213,45 @@ Recent review feedback to carry forward:
 * the range filter block should be shorter and more information-dense
 * map overlay cards should become lighter and more typographically refined
 
+Additional UI review backlog from the latest pass:
+
+* lighten map overlay cards further:
+  * reduce overlay fill density
+  * soften shadows
+  * trim inner padding slightly
+  * weaken secondary text contrast
+* improve information hierarchy inside the selected-point card:
+  * point id strongest
+  * speed / lean secondary
+  * coordinates / accel / distance tertiary
+* refine right-side tabs and content panel seam:
+  * lighter active tab surface
+  * less heavy selected fill
+  * cleaner relation between tab bar and content area
+* unify the selected-state accent across map, charts, grid, and playback readouts
+* calm the points table further:
+  * weaker grid lines
+  * softer hover
+  * clearer separation between hover and selected row
+  * stronger selected-row affordance, ideally including a left accent rail
+  * better numeric alignment
+* keep tightening the playback strip:
+  * reduce emphasis on the static "Playback" label and speed summary
+  * make the slider the primary visual anchor
+  * make transport buttons and speed dropdown more secondary
+  * tighten alignment between slider, summary text, and speed selector
+* bring the range-filter block to a more unified rhythm:
+  * stricter alignment for "from / to"
+  * clearer number styling
+  * less dominant reset action
+  * slightly stronger range summary readability
+* make chart tabs cleaner by moving summary metrics into explicit info rows above plots
+* make the statistics tab feel more complete by filling the lower area with secondary metrics or selected-point-vs-range comparisons
+* lighten and regularize session summary + status bar copy:
+  * stronger filename, weaker metadata
+  * more product-like status messages instead of debug/log phrasing
+* verify radius consistency and 8px-grid spacing across panels, cards, tabs, and control strips
+
 Current pass status:
 
 * the second UI pass has been implemented in the current baseline:
@@ -381,6 +420,19 @@ Suggested work:
   * preserve accent-only burgundy usage
   * preserve denser toolbar and control rows
   * preserve lighter map cards
+* prioritize polish that directly strengthens the core linked-selection workflow:
+  * unify selected-state accent across table, charts, map, and playback
+  * make playback slider the dominant navigation control
+  * make selected rows / markers / current-point readouts instantly scannable
+* continue softening support chrome around the data:
+  * lighter map overlays
+  * calmer table treatment
+  * cleaner tab active state
+  * more compact session summary and status bar
+* finish consistency cleanup:
+  * shared corner-radius rules
+  * stricter 8px-grid spacing
+  * more consistent typography hierarchy in cards and summaries
 * explicit settings screen
 * clearer empty/loading/error states
 * better large-file responsiveness

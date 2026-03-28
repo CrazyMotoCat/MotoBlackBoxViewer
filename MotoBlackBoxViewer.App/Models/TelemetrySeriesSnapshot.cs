@@ -63,9 +63,9 @@ public sealed class TelemetrySeriesSnapshot
 
         ChartSeriesDefinition[] accelSeries =
         [
-            new ChartSeriesDefinition("Accel X", accelXSeries, "#22C55E"),
-            new ChartSeriesDefinition("Accel Y", accelYSeries, "#F59E0B"),
-            new ChartSeriesDefinition("Accel Z", accelZSeries, "#EF4444")
+            new ChartSeriesDefinition("Accel X", accelXSeries, "#C65D7B"),
+            new ChartSeriesDefinition("Accel Y", accelYSeries, "#E09F3E"),
+            new ChartSeriesDefinition("Accel Z", accelZSeries, "#8F2D3B")
         ];
 
         return new TelemetrySeriesSnapshot(
