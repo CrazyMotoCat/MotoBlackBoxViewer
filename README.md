@@ -73,3 +73,15 @@
 ```bash
 dotnet test MotoBlackBoxViewer.sln
 ```
+
+
+## GitHub
+В репозиторий уже добавлены:
+- `.gitignore` для Visual Studio / .NET
+- `.gitattributes`
+- GitHub Actions workflow: `.github/workflows/dotnet.yml`
+
+После публикации на GitHub CI будет автоматически делать:
+- `dotnet restore`
+- `dotnet build`
+- `dotnet test`
