@@ -13,15 +13,34 @@ public sealed class TelemetryAnalyzer : ITelemetryAnalyzer
         double startDistance = points[0].DistanceFromStartMeters;
         double endDistance = points[^1].DistanceFromStartMeters;
         double totalDistance = Math.Max(0, endDistance - startDistance);
+        double speedSum = 0;
+        double maxSpeed = double.MinValue;
+        double minLean = double.MaxValue;
+        double maxLean = double.MinValue;
+
+        for (int i = 0; i < points.Count; i++)
+        {
+            TelemetryPoint point = points[i];
+            speedSum += point.SpeedKmh;
+
+            if (point.SpeedKmh > maxSpeed)
+                maxSpeed = point.SpeedKmh;
+
+            if (point.LeanAngleDeg < minLean)
+                minLean = point.LeanAngleDeg;
+
+            if (point.LeanAngleDeg > maxLean)
+                maxLean = point.LeanAngleDeg;
+        }
 
         return new TelemetryStatistics
         {
             PointCount = points.Count,
             TotalDistanceMeters = totalDistance,
-            AverageSpeedKmh = points.Average(p => p.SpeedKmh),
-            MaxSpeedKmh = points.Max(p => p.SpeedKmh),
-            MinLeanDeg = points.Min(p => p.LeanAngleDeg),
-            MaxLeanDeg = points.Max(p => p.LeanAngleDeg)
+            AverageSpeedKmh = speedSum / points.Count,
+            MaxSpeedKmh = maxSpeed,
+            MinLeanDeg = minLean,
+            MaxLeanDeg = maxLean
         };
     }
 }

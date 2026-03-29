@@ -24,6 +24,8 @@ public sealed class TelemetrySessionState
 
     public int FilterEndIndex { get; set; }
 
+    public int ChartWindowRadius { get; set; } = 1000;
+
     public int MapRefreshVersion { get; set; }
 
     public bool IsRestoringSession { get; set; }

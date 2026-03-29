@@ -414,3 +414,19 @@ CI:
 Стартовая фраза для нового чата:
 
 `Продолжаем в D:\Codex\MotoBlackBoxViewer_upstream. Прочитай README.md и ROADMAP.md. main уже запушен, UI cleanup по карте и summary duplication уже сделан, coordinator частично разрезан на helper services, тесты сейчас 36/36. Дальше хочу либо добить app-layer tests под новые scenario services, либо продолжить дробление TelemetryWorkspaceCoordinator.`
+---
+
+## Update Note
+
+* chart window selector now supports `50 / 100 / 200 / 500 / 1000 / 5000 / full range`
+* the selected chart window is restored from session settings after restart
+* chart rendering now does a first-pass downsampling on the render path and skips redundant redraws for unchanged render state
+* filtered chart series now reuse full-series buffers through cheap slice views instead of rebuilding chart arrays from telemetry points on every filter change
+* chart performance smoke coverage now includes a real large-log scenario based on `example_log_35000dots.csv`
+* chart pipeline now also emits lightweight performance diagnostics for large visible-data builds and downsampling operations through `Trace`
+* `CreateVisibleData(...)` now also avoids materializing visible-position dictionaries for contiguous ranges and uses a single-pass analyzer instead of repeated LINQ scans
+* next architectural step for the chart pipeline:
+  * move from lightweight perf diagnostics toward an explicit developer-facing profiling mode
+  * aggregate one-session timings for `CreateVisibleData`, chart slicing, downsampling, and redraw cost so large-log bottlenecks are visible without ad-hoc tracing
+  * then decide whether the next deep cut should target incremental statistics, filtered-position lookup, or a wider chart-data cache layer
+* current app-layer test baseline: `64 / 64`

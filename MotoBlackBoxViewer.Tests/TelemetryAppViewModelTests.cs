@@ -56,6 +56,27 @@ public sealed class TelemetryAppViewModelTests
     }
 
     [Fact]
+    public void CreateVisibleData_UsesSeriesSliceViewsInsteadOfRebuildingChartArrays()
+    {
+        var processor = new TelemetryDataProcessor(new TelemetryAnalyzer());
+        List<TelemetryPoint> allPoints =
+        [
+            CreatePoint(1, 10),
+            CreatePoint(2, 20),
+            CreatePoint(3, 30),
+            CreatePoint(4, 40),
+            CreatePoint(5, 50)
+        ];
+
+        TelemetryVisibleData visibleData = processor.CreateVisibleData(allPoints, startIndex: 2, endIndex: 4);
+
+        Assert.IsType<ArraySegment<double>>(visibleData.SeriesSnapshot.SpeedSeries);
+        Assert.IsType<ArraySegment<double>>(visibleData.SeriesSnapshot.LeanSeries);
+        Assert.IsType<ArraySegment<double>>(visibleData.SeriesSnapshot.AccelXSeries);
+        Assert.Equal([20d, 30d, 40d], visibleData.SeriesSnapshot.SpeedSeries);
+    }
+
+    [Fact]
     public void Selection_Dispose_UnsubscribesFromDataEvents()
     {
         var data = CreateLoadedDataViewModel();

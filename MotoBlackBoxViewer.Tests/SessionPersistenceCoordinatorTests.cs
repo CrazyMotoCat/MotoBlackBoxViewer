@@ -16,6 +16,7 @@ public sealed class SessionPersistenceCoordinatorTests
             CurrentFilePath = "ride.csv",
             FilterStartIndex = 1,
             FilterEndIndex = 42,
+            ChartWindowRadius = 200,
             PlaybackPosition = 3
         };
 
@@ -39,6 +40,7 @@ public sealed class SessionPersistenceCoordinatorTests
         var state = new TelemetrySessionState
         {
             CurrentFilePath = "ride.csv",
+            ChartWindowRadius = 50,
             PlaybackPosition = 7
         };
 
@@ -50,6 +52,7 @@ public sealed class SessionPersistenceCoordinatorTests
         Assert.Single(settingsService.SavedSnapshots);
         AppSessionSettings snapshot = settingsService.SavedSnapshots[0];
         Assert.Equal("4x", snapshot.SelectedPlaybackSpeedLabel);
+        Assert.Equal(50, snapshot.SelectedChartWindowRadius);
         Assert.Equal(9, snapshot.SelectedVisiblePosition);
     }
 
@@ -110,6 +113,7 @@ public sealed class SessionPersistenceCoordinatorTests
                 LastFilePath = settings.LastFilePath,
                 FilterStartIndex = settings.FilterStartIndex,
                 FilterEndIndex = settings.FilterEndIndex,
+                SelectedChartWindowRadius = settings.SelectedChartWindowRadius,
                 SelectedPlaybackSpeedLabel = settings.SelectedPlaybackSpeedLabel,
                 SelectedVisiblePosition = settings.SelectedVisiblePosition
             });

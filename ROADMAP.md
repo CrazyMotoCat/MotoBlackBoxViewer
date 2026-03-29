@@ -38,6 +38,9 @@ The app already supports:
   Review note: presets now extend through `8x` and `16x` for faster route scrubbing.
 * point range filtering
 * chart viewport mode around the current point:
+  * `50` before / `50` after
+  * `100` before / `100` after
+  * `200` before / `200` after
   * `500` before / `500` after
   * `1000` before / `1000` after
   * `5000` before / `5000` after
@@ -150,9 +153,9 @@ Current automated coverage focuses on the most stable logic:
 * map script escaping
 * async command reentrancy/error recovery
 
-At the time of writing there are 53 unit tests across 11 test files, and
+At the time of writing there are 64 unit tests across 14 test files, and
 `dotnet test MotoBlackBoxViewer.sln` is green locally on `.NET 10`.
-Additional note: the current checked baseline is `53 / 53` green via
+Additional note: the current checked baseline is `64 / 64` green via
 `dotnet test MotoBlackBoxViewer.Tests\MotoBlackBoxViewer.Tests.csproj /p:UseAppHost=false`
 when the desktop app binary is already running and locks the normal app output.
 
@@ -167,6 +170,7 @@ Missing coverage for:
 TODO:
 
 * extend tests toward real-world failure scenarios, not only happy paths
+* keep growing large-log smoke coverage around chart and map-heavy workflows
 
 ## Current Technical Shape
 
@@ -197,6 +201,18 @@ The codebase is in a good intermediate state:
   * `TelemetryWorkspaceInteractionService`
 * chart rendering now supports a focused viewport around the selected point,
   which keeps redraw cost bounded on large logs.
+* chart rendering now also applies a first-pass render-time downsampling step
+  and skips redundant redraws when the effective render state has not changed
+* filtered chart series now reuse full-series buffers through slice views,
+  which avoids rebuilding chart arrays from telemetry points on every filter
+  change
+* chart pipeline now emits lightweight performance diagnostics for large
+  visible-data builds and downsampling passes through `Trace`
+* `CreateVisibleData(...)` now also avoids materializing visible-position
+  dictionaries for contiguous ranges, and telemetry statistics are computed in
+  a single analyzer pass instead of repeated LINQ scans
+* chart tests now include large-log smoke coverage using the checked-in
+  `example_log_35000dots.csv` dataset
 * runtime map payloads are now downsampled before being sent into WebView2,
   while selected-point sync uses live coordinates instead of relying on the
   route payload to contain every original index.
@@ -349,9 +365,10 @@ These are the places most likely to matter in future work:
 
    ⚠️ Review note:
 
-   * current rendering approach may not scale well with large point counts
-   * no decimation/downsampling yet
-   * full redraw + array materialization still happen on each UI update
+   * current rendering approach still has headroom on very large point counts
+   * a first-pass downsampling path now exists, and filtered chart series now
+     reuse full-series buffers through slice views
+   * full redraw still happens when the effective render state changes
 
 ## Review Backlog
 
@@ -372,7 +389,8 @@ These review notes still look valid and should stay visible for future work:
 
 * CSV parsing silently skips malformed rows instead of reporting them
 * analytics currently use simple averages instead of time-aware metrics
-* chart rendering does not yet optimize for large datasets
+* chart rendering now has an initial large-dataset optimization pass, but it
+  still needs deeper work for very large logs and broader performance coverage
 * async flows are safer in some critical paths now, but broader end-to-end UI
   coverage and clearer surfacing are still needed
 
@@ -418,7 +436,8 @@ Suggested work:
 
 ➕ Add:
 
-* tests for large datasets and performance-sensitive paths
+* deepen tests for large datasets and performance-sensitive paths beyond the
+  first large-log smoke coverage now in place
 * more runtime map sync tests beyond escaping-only checks
 
 Success signal:
@@ -536,7 +555,7 @@ These are relatively high leverage:
 
 ➕ Add:
 
-* introduce data caching / downsampling strategy for charts
+* deepen the new chart downsampling strategy with smarter profiling and tests
 
 ## Known Environment Notes
 
@@ -562,11 +581,21 @@ If you need to rehydrate context quickly in a future conversation:
   * UI cleanup for map summary duplication
   * coordinator helper-service split
   * expanded app-layer test safety net
-* The current test baseline is `53 / 53` green on the test project run, and the
+* The current test baseline is `64 / 64` green on the test project run, and the
   full solution run still requires the app binary not to be locked by a running
   desktop instance.
 * The latest map-side resilience step is already in place: runtime OSM tiles go
   through a local disk cache/proxy layer in `MapViewControl`.
+* Chart viewport mode now has smaller `50 / 100 / 200` options and the selected
+  chart window is restored from session settings across app restarts.
+* A first chart-performance pass is also in place: render-time downsampling and
+  redundant-redraw suppression now reduce chart cost on large visible ranges.
+* The chart test baseline now also includes large-log smoke coverage against the
+  checked-in `example_log_35000dots.csv` example dataset.
+* The deeper chart pipeline now also exposes lightweight perf instrumentation so
+  large-range processing can be observed through `Trace` and test listeners.
+* `CreateVisibleData(...)` now also benefits from a lazy contiguous
+  visible-position map and a single-pass analyzer implementation.
 * The most likely next engineering task is to keep improving
   orchestration/testability, then deepen the tile cache with lifecycle and
   offline-friendly behavior if map UX still needs more work.

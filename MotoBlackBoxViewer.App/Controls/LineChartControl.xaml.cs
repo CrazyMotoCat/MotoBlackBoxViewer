@@ -1,12 +1,15 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using System.Runtime.CompilerServices;
 
 namespace MotoBlackBoxViewer.App.Controls;
 
 public partial class LineChartControl : UserControl
 {
+    private const double PointsPerPixel = 2d;
     private bool _redrawQueued;
+    private RenderState _lastRenderState;
 
     public static readonly DependencyProperty ValuesProperty = DependencyProperty.Register(
         nameof(Values),
@@ -106,7 +109,41 @@ public partial class LineChartControl : UserControl
     private void Redraw()
     {
         var values = Values ?? Array.Empty<double>();
+        RenderState nextState = new(
+            RuntimeHelpers.GetHashCode(values),
+            SelectedIndex,
+            WindowRadius,
+            Unit,
+            SeriesLabel,
+            LineColorHex,
+            ChartCanvas.ActualWidth,
+            ChartCanvas.ActualHeight);
+        if (Equals(_lastRenderState, nextState))
+            return;
+
         (IReadOnlyList<double> windowedValues, int? windowedSelectedIndex) = ChartViewportHelper.SliceValues(values, SelectedIndex, WindowRadius);
-        ChartRenderHelper.DrawSingleSeries(ChartCanvas, windowedValues, Unit, windowedSelectedIndex, LineColorHex, SeriesLabel);
+        int maxRenderablePointCount = GetMaxRenderablePointCount();
+        (IReadOnlyList<double> renderValues, int? renderSelectedIndex) = ChartDownsamplingHelper.DownsampleValues(
+            windowedValues,
+            windowedSelectedIndex,
+            maxRenderablePointCount);
+        ChartRenderHelper.DrawSingleSeries(ChartCanvas, renderValues, Unit, renderSelectedIndex, LineColorHex, SeriesLabel);
+        _lastRenderState = nextState;
     }
+
+    private int GetMaxRenderablePointCount()
+    {
+        double width = Math.Max(1, ChartCanvas.ActualWidth);
+        return Math.Max(64, (int)Math.Ceiling(width * PointsPerPixel));
+    }
+
+    private readonly record struct RenderState(
+        int ValuesIdentity,
+        int? SelectedIndex,
+        int WindowRadius,
+        string Unit,
+        string SeriesLabel,
+        string LineColorHex,
+        double Width,
+        double Height);
 }

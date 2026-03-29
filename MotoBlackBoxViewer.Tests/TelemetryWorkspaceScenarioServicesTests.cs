@@ -83,6 +83,7 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
             LastFilePath = filePath,
             FilterStartIndex = 2,
             FilterEndIndex = 3,
+            SelectedChartWindowRadius = 200,
             SelectedPlaybackSpeedLabel = "2x",
             SelectedVisiblePosition = 99
         };
@@ -90,6 +91,7 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
         string? status = await service.RestoreLastSessionAsync(session);
 
         Assert.Equal("2x", context.Playback.SelectedPlaybackSpeed.Label);
+        Assert.Equal(200, context.Data.ChartWindowRadius);
         Assert.Equal([2, 3], context.Data.Points.Select(point => point.Index));
         Assert.Equal(2, context.Selection.PlaybackPosition);
         Assert.Equal(3, context.Selection.SelectedPoint?.Index);
@@ -109,12 +111,14 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
             context.Synchronization);
         AppSessionSettings session = new()
         {
+            SelectedChartWindowRadius = 50,
             SelectedPlaybackSpeedLabel = "0.5x"
         };
 
         string? status = await service.RestoreLastSessionAsync(session);
 
         Assert.Null(status);
+        Assert.Equal(50, context.Data.ChartWindowRadius);
         Assert.Equal("0.5x", context.Playback.SelectedPlaybackSpeed.Label);
         Assert.False(context.Data.HasSourceData);
         Assert.Equal(0, context.Map.RefreshVersion);
@@ -127,6 +131,7 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
             CurrentFilePath = "ride.csv",
             FilterStartIndex = 2,
             FilterEndIndex = 4,
+            ChartWindowRadius = 200,
             PlaybackPosition = 3
         };
     }

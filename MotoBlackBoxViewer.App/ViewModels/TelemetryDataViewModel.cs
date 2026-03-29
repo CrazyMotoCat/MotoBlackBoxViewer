@@ -11,6 +11,9 @@ public sealed class TelemetryDataViewModel : ObservableObject
 {
     private static readonly ChartWindowOption[] DefaultChartWindowOptions =
     [
+        new("50 до / 50 после", 50),
+        new("100 до / 100 после", 100),
+        new("200 до / 200 после", 200),
         new("500 до / 500 после", 500),
         new("1000 до / 1000 после", 1000),
         new("5000 до / 5000 после", 5000),
@@ -23,7 +26,7 @@ public sealed class TelemetryDataViewModel : ObservableObject
     private IReadOnlyDictionary<int, int> _visiblePositionsByPointIndex = new Dictionary<int, int>();
     private TelemetrySeriesSnapshot _seriesSnapshot = TelemetrySeriesSnapshot.Empty;
     private int _visibleDataVersion;
-    private ChartWindowOption _selectedChartWindow = DefaultChartWindowOptions[1];
+    private ChartWindowOption _selectedChartWindow;
 
     public TelemetryDataViewModel(
         ICsvTelemetryReader reader,
@@ -33,6 +36,7 @@ public sealed class TelemetryDataViewModel : ObservableObject
         _reader = reader;
         _dataProcessor = dataProcessor;
         _state = state;
+        _selectedChartWindow = ResolveChartWindowOption(_state.ChartWindowRadius);
         Points = new ReadOnlyObservableCollection<TelemetryPoint>(_state.VisiblePoints);
     }
 
@@ -49,6 +53,7 @@ public sealed class TelemetryDataViewModel : ObservableObject
                 return;
 
             _selectedChartWindow = value;
+            _state.ChartWindowRadius = value.Radius;
             RaisePropertyChanged();
             RaisePropertyChanged(nameof(ChartWindowRadius));
             RaisePropertyChanged(nameof(ChartWindowSummary));
@@ -176,6 +181,19 @@ public sealed class TelemetryDataViewModel : ObservableObject
         RaisePropertyChanged(nameof(FilterStartIndex));
         RaisePropertyChanged(nameof(FilterEndIndex));
         RaisePropertyChanged(nameof(FilterSummary));
+    }
+
+    public void RestoreChartWindowRadius(int radius)
+    {
+        ChartWindowOption option = ResolveChartWindowOption(radius);
+        if (Equals(_selectedChartWindow, option))
+            return;
+
+        _selectedChartWindow = option;
+        _state.ChartWindowRadius = option.Radius;
+        RaisePropertyChanged(nameof(SelectedChartWindow));
+        RaisePropertyChanged(nameof(ChartWindowRadius));
+        RaisePropertyChanged(nameof(ChartWindowSummary));
     }
 
     public TelemetryPoint? ApplyCurrentFilter(TelemetryPoint? preferredPoint, bool updateStatus)
@@ -336,4 +354,8 @@ public sealed class TelemetryDataViewModel : ObservableObject
         RaisePropertyChanged(nameof(AccelSeries));
         RaisePropertyChanged(nameof(FilterSummary));
     }
+
+    private static ChartWindowOption ResolveChartWindowOption(int radius)
+        => DefaultChartWindowOptions.FirstOrDefault(option => option.Radius == radius)
+            ?? DefaultChartWindowOptions.First(option => option.Radius == 1000);
 }

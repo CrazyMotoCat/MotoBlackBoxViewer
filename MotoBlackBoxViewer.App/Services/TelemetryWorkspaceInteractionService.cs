@@ -95,7 +95,11 @@ internal sealed class TelemetryWorkspaceInteractionService
         {
             StopPlayback(updateStatus: false);
             ApplyFilterAndSynchronize(updateStatus: true);
+            return;
         }
+
+        if (propertyName is nameof(TelemetryDataViewModel.SelectedChartWindow))
+            PersistSession(includeSelectedPosition: false);
     }
 
     public void HandleSelectionPropertyChanged(string? propertyName)

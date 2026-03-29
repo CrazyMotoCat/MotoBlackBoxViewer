@@ -71,7 +71,7 @@
                            Foreground="{StaticResource MutedTextBrush}"
                            VerticalAlignment="Center"
                            Margin="0,0,8,0" />
-                <ComboBox Width="190"
+                <ComboBox Width="220"
                           Height="28"
                           VerticalAlignment="Center"
                           ItemsSource="{Binding Workspace.Data.ChartWindowOptions}"

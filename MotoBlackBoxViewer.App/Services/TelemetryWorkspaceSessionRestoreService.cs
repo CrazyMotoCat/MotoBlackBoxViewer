@@ -22,6 +22,7 @@ internal sealed class TelemetryWorkspaceSessionRestoreService
 
     public async Task<string?> RestoreLastSessionAsync(AppSessionSettings session, CancellationToken cancellationToken = default)
     {
+        _data.RestoreChartWindowRadius(session.SelectedChartWindowRadius);
         _playback.RestoreSpeed(session.SelectedPlaybackSpeedLabel);
 
         if (string.IsNullOrWhiteSpace(session.LastFilePath))

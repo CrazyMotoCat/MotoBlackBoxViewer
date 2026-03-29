@@ -32,6 +32,7 @@ internal sealed class TelemetryWorkspaceSynchronizationService
 
     public void RestoreSessionView(AppSessionSettings session)
     {
+        _data.RestoreChartWindowRadius(session.SelectedChartWindowRadius);
         _data.RestoreFilterRange(session.FilterStartIndex, session.FilterEndIndex);
 
         TelemetryPoint? preferredPoint = _data.ApplyCurrentFilter(_state.SelectedPoint, updateStatus: false);

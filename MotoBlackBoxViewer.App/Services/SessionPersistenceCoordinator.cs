@@ -57,6 +57,7 @@ public sealed class SessionPersistenceCoordinator : ISessionPersistenceCoordinat
             LastFilePath = state.CurrentFilePath,
             FilterStartIndex = state.FilterStartIndex,
             FilterEndIndex = state.FilterEndIndex,
+            SelectedChartWindowRadius = state.ChartWindowRadius,
             SelectedPlaybackSpeedLabel = selectedPlaybackSpeedLabel,
             SelectedVisiblePosition = includeSelectedPosition ? state.PlaybackPosition : 0
         };

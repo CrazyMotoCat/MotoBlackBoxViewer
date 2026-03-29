@@ -34,6 +34,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
             LastFilePath = filePath,
             FilterStartIndex = 2,
             FilterEndIndex = 3,
+            SelectedChartWindowRadius = 200,
             SelectedPlaybackSpeedLabel = "2x",
             SelectedVisiblePosition = 2
         };
@@ -43,6 +44,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         await context.Coordinator.InitializeAsync();
 
         Assert.Equal("2x", context.Playback.SelectedPlaybackSpeed.Label);
+        Assert.Equal(200, context.Data.ChartWindowRadius);
         Assert.Equal(2, context.Data.FilterStartIndex);
         Assert.Equal(3, context.Data.FilterEndIndex);
         Assert.Equal([2, 3], context.Data.Points.Select(p => p.Index));
@@ -199,6 +201,21 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         Assert.Single(context.SessionPersistenceCoordinator.SaveCalls);
         Assert.True(context.SessionPersistenceCoordinator.SaveCalls[0].IncludeSelectedPosition);
         Assert.Equal(2, context.SessionPersistenceCoordinator.SaveCalls[0].PlaybackPosition);
+    }
+
+    [Fact]
+    public async Task HandleDataPropertyChanged_WhenChartWindowChanges_PersistsWithoutSelectedPosition()
+    {
+        using TestContext context = CreateContext(new AppSessionSettings());
+        await context.Coordinator.LoadCsvAsync("ride.csv");
+        context.SessionPersistenceCoordinator.SaveCalls.Clear();
+        context.Data.SelectedChartWindow = context.Data.ChartWindowOptions.First(option => option.Radius == 50);
+
+        context.Coordinator.HandleDataPropertyChanged(nameof(TelemetryDataViewModel.SelectedChartWindow));
+
+        Assert.Single(context.SessionPersistenceCoordinator.SaveCalls);
+        Assert.False(context.SessionPersistenceCoordinator.SaveCalls[0].IncludeSelectedPosition);
+        Assert.Equal(50, context.State.ChartWindowRadius);
     }
 
     [Fact]
@@ -437,6 +454,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
             LastFilePath = _loadSettings.LastFilePath,
             FilterStartIndex = _loadSettings.FilterStartIndex,
             FilterEndIndex = _loadSettings.FilterEndIndex,
+            SelectedChartWindowRadius = _loadSettings.SelectedChartWindowRadius,
             SelectedPlaybackSpeedLabel = _loadSettings.SelectedPlaybackSpeedLabel,
             SelectedVisiblePosition = _loadSettings.SelectedVisiblePosition
         };

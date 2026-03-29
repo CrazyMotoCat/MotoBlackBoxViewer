@@ -44,6 +44,7 @@ internal sealed class TelemetryWorkspacePersistenceService
             state.CurrentFilePath,
             state.FilterStartIndex,
             state.FilterEndIndex,
+            state.ChartWindowRadius,
             selectedPlaybackSpeedLabel,
             includeSelectedPosition,
             includeSelectedPosition ? state.PlaybackPosition : 0);
@@ -53,6 +54,7 @@ internal sealed class TelemetryWorkspacePersistenceService
         string? CurrentFilePath,
         int FilterStartIndex,
         int FilterEndIndex,
+        int ChartWindowRadius,
         string SelectedPlaybackSpeedLabel,
         bool IncludeSelectedPosition,
         int PlaybackPosition);

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
+using System.Runtime.CompilerServices;
 
 using MotoBlackBoxViewer.App.Models;
 
@@ -8,7 +9,9 @@ namespace MotoBlackBoxViewer.App.Controls;
 
 public partial class MultiLineChartControl : UserControl
 {
+    private const double PointsPerPixel = 2d;
     private bool _redrawQueued;
+    private RenderState _lastRenderState;
 
     public static readonly DependencyProperty SeriesProperty = DependencyProperty.Register(
         nameof(Series),
@@ -84,7 +87,37 @@ public partial class MultiLineChartControl : UserControl
     private void Redraw()
     {
         var series = Series ?? Array.Empty<ChartSeriesDefinition>();
+        RenderState nextState = new(
+            RuntimeHelpers.GetHashCode(series),
+            SelectedIndex,
+            WindowRadius,
+            Unit,
+            ChartCanvas.ActualWidth,
+            ChartCanvas.ActualHeight);
+        if (Equals(_lastRenderState, nextState))
+            return;
+
         (IReadOnlyList<ChartSeriesDefinition> windowedSeries, int? windowedSelectedIndex) = ChartViewportHelper.SliceSeries(series, SelectedIndex, WindowRadius);
-        ChartRenderHelper.DrawMultiSeries(ChartCanvas, windowedSeries, Unit, windowedSelectedIndex);
+        int maxRenderablePointCount = GetMaxRenderablePointCount();
+        (IReadOnlyList<ChartSeriesDefinition> renderSeries, int? renderSelectedIndex) = ChartDownsamplingHelper.DownsampleSeries(
+            windowedSeries,
+            windowedSelectedIndex,
+            maxRenderablePointCount);
+        ChartRenderHelper.DrawMultiSeries(ChartCanvas, renderSeries, Unit, renderSelectedIndex);
+        _lastRenderState = nextState;
     }
+
+    private int GetMaxRenderablePointCount()
+    {
+        double width = Math.Max(1, ChartCanvas.ActualWidth);
+        return Math.Max(64, (int)Math.Ceiling(width * PointsPerPixel));
+    }
+
+    private readonly record struct RenderState(
+        int SeriesIdentity,
+        int? SelectedIndex,
+        int WindowRadius,
+        string Unit,
+        double Width,
+        double Height);
 }
