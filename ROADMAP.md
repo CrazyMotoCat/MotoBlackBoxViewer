@@ -150,9 +150,9 @@ Current automated coverage focuses on the most stable logic:
 * map script escaping
 * async command reentrancy/error recovery
 
-At the time of writing there are 44 unit tests across 10 test files, and
+At the time of writing there are 53 unit tests across 11 test files, and
 `dotnet test MotoBlackBoxViewer.sln` is green locally on `.NET 10`.
-Additional note: the current checked baseline is `47 / 47` green via
+Additional note: the current checked baseline is `53 / 53` green via
 `dotnet test MotoBlackBoxViewer.Tests\MotoBlackBoxViewer.Tests.csproj /p:UseAppHost=false`
 when the desktop app binary is already running and locks the normal app output.
 
@@ -213,9 +213,11 @@ The codebase is in a good intermediate state:
 * the embedded map now navigates via a local `https` WebView2 host mapping
   instead of `file://`, which keeps runtime tile loading compatible with the
   current OpenStreetMap tile policy requiring a valid `Referer`
-* the next architectural map step should be a local OpenStreetMap tile
-  cache/proxy layer so tile reuse survives fast scrubbing and repeated sessions
-  instead of depending only on network-backed WebView tile fetches
+* runtime OpenStreetMap tile requests are now intercepted inside WebView2 and
+  served through a local disk-backed cache/proxy layer before falling back to
+  normal network loading
+* this reduces repeated tile fetch churn during aggressive scrubbing and when
+  revisiting the same route areas across sessions
 * tests cover core parsing, analytics, session persistence, and a growing part
   of the app-layer behavior, including workspace-level guardrails against
   duplicate session persistence during internal synchronization
@@ -458,8 +460,8 @@ Suggested work:
 * consider saved report bundles for sharing a session
 * reduce route payload size or move to incremental map updates if long-route
   performance becomes visible
-* add a local tile cache/proxy for OSM requests to reduce black-tile / delayed
-  tile recovery during aggressive slider scrubbing and repeated map review
+* extend the new local OSM tile cache/proxy with cache eviction, diagnostics,
+  and clearer offline behavior
 
 Success signal:
 
@@ -543,6 +545,9 @@ These are relatively high leverage:
 * Running or testing locally requires a .NET SDK in the environment
 * Embedded map uses WebView2
 * Map tiles rely on internet access because they come from OpenStreetMap
+* Runtime map tiles now use a local disk cache/proxy layer inside WebView2, but
+  exported HTML opened in an external browser still relies on direct OSM access
+* The runtime HTML map now uses `MapLibre GL JS` as the browser-side map engine
 
 ## Quick Context For Next Chat
 
@@ -557,10 +562,13 @@ If you need to rehydrate context quickly in a future conversation:
   * UI cleanup for map summary duplication
   * coordinator helper-service split
   * expanded app-layer test safety net
-* The current test baseline is `47 / 47` green on the test project run, and the
+* The current test baseline is `53 / 53` green on the test project run, and the
   full solution run still requires the app binary not to be locked by a running
   desktop instance.
+* The latest map-side resilience step is already in place: runtime OSM tiles go
+  through a local disk cache/proxy layer in `MapViewControl`.
 * The most likely next engineering task is to keep improving
-  orchestration/testability and gradually split mixed state containers.
+  orchestration/testability, then deepen the tile cache with lifecycle and
+  offline-friendly behavior if map UX still needs more work.
 * The most likely next product task is richer filtering and analysis, but only
   after the app layer gets a bit more regression safety.

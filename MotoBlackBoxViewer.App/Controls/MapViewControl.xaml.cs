@@ -11,8 +11,10 @@ public partial class MapViewControl : UserControl
 {
     private const string MapHostName = "appassets.motoblackboxviewer";
     private static readonly Uri MapPageUri = new($"https://{MapHostName}/index.html");
+    private readonly OpenStreetMapTileCacheService _tileCache = new();
 
     private bool _isMapReady;
+    private bool _tileRequestInterceptionInitialized;
     private string _appliedRouteJson = string.Empty;
     private int _appliedRefreshVersion = -1;
     private int? _appliedSelectedPointIndex;
@@ -150,6 +152,7 @@ public partial class MapViewControl : UserControl
                 return;
 
             await MapWebView.EnsureCoreWebView2Async();
+            ConfigureTileRequestInterception();
             MapWebView.CoreWebView2.SetVirtualHostNameToFolderMapping(
                 MapHostName,
                 assetsFolder,
@@ -160,6 +163,21 @@ public partial class MapViewControl : UserControl
         {
             Trace.TraceError($"Failed to initialize map control: {ex}");
         }
+    }
+
+    private void ConfigureTileRequestInterception()
+    {
+        if (_tileRequestInterceptionInitialized || MapWebView.CoreWebView2 is null)
+            return;
+
+        MapWebView.CoreWebView2.AddWebResourceRequestedFilter(
+            "https://tile.openstreetmap.org/*",
+            CoreWebView2WebResourceContext.Image);
+        MapWebView.CoreWebView2.AddWebResourceRequestedFilter(
+            "https://*.tile.openstreetmap.org/*",
+            CoreWebView2WebResourceContext.Image);
+        MapWebView.CoreWebView2.WebResourceRequested += MapWebView_WebResourceRequested;
+        _tileRequestInterceptionInitialized = true;
     }
 
     private async void MapWebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
@@ -282,5 +300,37 @@ public partial class MapViewControl : UserControl
         _appliedSelectedPointIndex = SelectedPointIndex;
         _appliedPlaybackRunning = IsPlaybackRunning;
         _appliedManualScrubbing = IsManualScrubbing;
+    }
+
+    private async void MapWebView_WebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        if (MapWebView.CoreWebView2 is null
+            || !Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out Uri? requestUri))
+        {
+            return;
+        }
+
+        CoreWebView2Deferral deferral = e.GetDeferral();
+        try
+        {
+            OpenStreetMapTileResponse? tile = await _tileCache.GetTileAsync(requestUri);
+            if (tile is null)
+                return;
+
+            MemoryStream contentStream = new(tile.Value.Content, writable: false);
+            e.Response = MapWebView.CoreWebView2.Environment.CreateWebResourceResponse(
+                contentStream,
+                200,
+                "OK",
+                $"Content-Type: {tile.Value.MimeType}");
+        }
+        catch (Exception ex)
+        {
+            Trace.TraceError($"Map tile interception failed for '{e.Request.Uri}': {ex}");
+        }
+        finally
+        {
+            deferral.Complete();
+        }
     }
 }

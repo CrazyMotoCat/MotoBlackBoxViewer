@@ -68,6 +68,7 @@
   * `_appliedRouteJson`
   * `_appliedRefreshVersion`
   * `_appliedSelectedPointIndex`
+* runtime-карта теперь дополнительно перехватывает OpenStreetMap tile requests внутри WebView2 и использует локальный disk cache, поэтому повторные pan/scrub проходы заметно реже упираются в black-tile / delayed-recovery эффект.
 * live map sync теперь coalesced: параллельные route/selection updates не разрастаются в россыпь независимых fire-and-forget задач.
 * базовая визуальная тема уже начала уходить от старого default-WPF вида к более целостной кастомной desktop-палитре.
 * второй UI-pass уже проведён:
@@ -168,6 +169,7 @@ TODO:
 * WebView2 + HTML-шаблон
 * маршрут передаётся через JS
 * используется OpenStreetMap
+* runtime JS map engine теперь использует `MapLibre GL JS` вместо `Leaflet`
 
 ⚠️ Review note:
 
@@ -175,6 +177,9 @@ TODO:
 * runtime WebView2 sync тоже уже не шлёт raw JSON напрямую, но всё ещё требует дальнейшей оптимизации по payload size и long-route responsiveness
 * `MapViewControl` уже кеширует применённое состояние и coalesced async updates, чтобы не слать одинаковые обновления повторно
 * embedded map runtime теперь использует local `https` host mapping вместо `file://` navigation, чтобы не упираться в OSM tile blocking из-за missing `Referer`
+* update: этот map-step уже реализован в runtime path
+  * OpenStreetMap tile requests now go through a local disk-backed cache/proxy layer inside `MapViewControl`
+  * current limitation: the exported standalone HTML map still relies on direct OSM access in the external browser
 * следующий архитектурный шаг по карте:
   * локальный tile cache / proxy для OpenStreetMap, чтобы большие сессии меньше зависели от повторной сетевой догрузки тайлов и быстрее переживали aggressive pan / scrub сценарии
 
@@ -392,6 +397,8 @@ CI:
 * solution уже на `.NET 10`, `global.json` закреплён на `10.0.201`
 * OSM runtime issue с `file://` уже обойдена через local `https` host mapping WebView2
 * map tile requests уже проверялись через netlog и шли с корректным `Referer`
+* runtime OSM tile cache/proxy уже внедрён в `MapViewControl`, поэтому повторные просмотры одного и того же участка меньше зависят от сети
+* app-layer tests сейчас зелёные: `53 / 53`
 * UI baseline уже заметно дочищен:
   * unified selected accent across grid/chart/playback
   * calmer table + left accent rail

@@ -4,8 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Moto Route Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.css">
   <style>
     html, body, #map { height: 100%; margin: 0; }
     body { background: #090204; color: #f4e7ea; font-family: Segoe UI, Arial, sans-serif; }
@@ -31,26 +30,42 @@
     #status.hidden {
       display: none;
     }
-    .leaflet-control-attribution { font-size: 11px; }
+    .maplibregl-ctrl-attrib {
+      font-size: 11px;
+    }
+    .maplibregl-ctrl-group {
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div id="status" class="panel">Map is ready. Load a CSV in the app.</div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/maplibre-gl@5.12.0/dist/maplibre-gl.js"></script>
   <script>
     let map;
+    let isMapReady = false;
     let routeData = [];
-    let routeLine = null;
-    let startMarker = null;
-    let finishMarker = null;
-    let selectedMarker = null;
     let pendingPanTarget = null;
     let pendingPanTimer = null;
+    let selectedState = {
+      lat: null,
+      lon: null,
+      isPlaybackRunning: false,
+      isManualScrubbing: false
+    };
 
     const statusEl = document.getElementById('status');
+
+    function emptyFeatureCollection() {
+      return {
+        type: 'FeatureCollection',
+        features: []
+      };
+    }
 
     function setStatus(text) {
       statusEl.classList.remove('hidden');
@@ -61,47 +76,258 @@
       statusEl.classList.add('hidden');
     }
 
+    function clearPendingPan() {
+      if (pendingPanTimer) {
+        clearTimeout(pendingPanTimer);
+        pendingPanTimer = null;
+      }
+
+      pendingPanTarget = null;
+    }
+
     function initMap() {
-      if (!window.L) {
-        setStatus('Failed to load Leaflet/OpenStreetMap. Check your internet connection.');
+      if (!window.maplibregl) {
+        setStatus('Failed to load MapLibre/OpenStreetMap. Check your internet connection.');
         return;
       }
 
-      map = L.map('map', {
-        zoomControl: true,
-        preferCanvas: true
-      }).setView([43.116877, 131.896234], 15);
+      map = new maplibregl.Map({
+        container: 'map',
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: 'raster',
+              tiles: [
+                'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png'
+              ],
+              tileSize: 256,
+              maxzoom: 19,
+              attribution: '&copy; OpenStreetMap contributors'
+            }
+          },
+          layers: [
+            {
+              id: 'osm',
+              type: 'raster',
+              source: 'osm',
+              paint: {
+                'raster-fade-duration': 0
+              }
+            }
+          ]
+        },
+        center: [131.896234, 43.116877],
+        zoom: 15
+      });
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors',
-        keepBuffer: 10,
-        updateWhenIdle: true,
-        updateWhenZooming: false
-      }).addTo(map);
+      map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-      if (Array.isArray(routeData) && routeData.length > 0) {
-        setRouteData(routeData);
-      } else {
-        setStatus('Map is ready. Load a CSV in the app.');
+      map.on('load', () => {
+        isMapReady = true;
+        ensureMapDataLayers();
+
+        if (Array.isArray(routeData) && routeData.length > 0) {
+          setRouteData(routeData);
+        } else {
+          setStatus('Map is ready. Load a CSV in the app.');
+        }
+
+        if (selectedState.lat !== null && selectedState.lon !== null) {
+          applySelectedPoint();
+        }
+      });
+
+      map.on('error', () => {
+        if (!isMapReady) {
+          setStatus('Failed to initialize the map renderer.');
+        }
+      });
+    }
+
+    function ensureMapDataLayers() {
+      if (!map) {
+        return;
+      }
+
+      if (!map.getSource('route')) {
+        map.addSource('route', {
+          type: 'geojson',
+          data: emptyFeatureCollection()
+        });
+      }
+
+      if (!map.getLayer('route-line')) {
+        map.addLayer({
+          id: 'route-line',
+          type: 'line',
+          source: 'route',
+          layout: {
+            'line-cap': 'round',
+            'line-join': 'round'
+          },
+          paint: {
+            'line-color': '#d45c6b',
+            'line-width': 5,
+            'line-opacity': 0.9
+          }
+        });
+      }
+
+      if (!map.getSource('route-endpoints')) {
+        map.addSource('route-endpoints', {
+          type: 'geojson',
+          data: emptyFeatureCollection()
+        });
+      }
+
+      if (!map.getLayer('route-endpoints-layer')) {
+        map.addLayer({
+          id: 'route-endpoints-layer',
+          type: 'circle',
+          source: 'route-endpoints',
+          paint: {
+            'circle-radius': 7,
+            'circle-color': ['get', 'fillColor'],
+            'circle-stroke-color': ['get', 'strokeColor'],
+            'circle-stroke-width': 2,
+            'circle-opacity': 0.95
+          }
+        });
+      }
+
+      if (!map.getSource('selected-point')) {
+        map.addSource('selected-point', {
+          type: 'geojson',
+          data: emptyFeatureCollection()
+        });
+      }
+
+      if (!map.getLayer('selected-point-layer')) {
+        map.addLayer({
+          id: 'selected-point-layer',
+          type: 'circle',
+          source: 'selected-point',
+          paint: {
+            'circle-radius': 9,
+            'circle-color': '#fb923c',
+            'circle-stroke-color': '#f08a5d',
+            'circle-stroke-width': 3,
+            'circle-opacity': 0.95
+          }
+        });
+      }
+    }
+
+    function setSourceData(sourceId, data) {
+      if (!map || !isMapReady) {
+        return;
+      }
+
+      const source = map.getSource(sourceId);
+      if (source) {
+        source.setData(data);
       }
     }
 
     function clearMapObjects() {
-      if (!map) return;
-      for (const layer of [routeLine, startMarker, finishMarker, selectedMarker]) {
-        if (layer) map.removeLayer(layer);
+      clearPendingPan();
+      setSourceData('route', emptyFeatureCollection());
+      setSourceData('route-endpoints', emptyFeatureCollection());
+      setSourceData('selected-point', emptyFeatureCollection());
+    }
+
+    function buildRouteFeature(points) {
+      return {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: points.map(point => [point.lon, point.lat])
+        },
+        properties: {}
+      };
+    }
+
+    function buildEndpointFeatures(points) {
+      const first = points[0];
+      const last = points[points.length - 1];
+
+      return {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [first.lon, first.lat]
+            },
+            properties: {
+              role: 'start',
+              fillColor: '#22c55e',
+              strokeColor: '#22c55e'
+            }
+          },
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [last.lon, last.lat]
+            },
+            properties: {
+              role: 'finish',
+              fillColor: '#ef4444',
+              strokeColor: '#ef4444'
+            }
+          }
+        ]
+      };
+    }
+
+    function buildSelectedPointFeature(lat, lon) {
+      return {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [lon, lat]
+            },
+            properties: {}
+          }
+        ]
+      };
+    }
+
+    function fitRoute(points) {
+      if (!map || !points.length) {
+        return;
       }
-      routeLine = null;
-      startMarker = null;
-      finishMarker = null;
-      selectedMarker = null;
+
+      const bounds = new maplibregl.LngLatBounds(
+        [points[0].lon, points[0].lat],
+        [points[0].lon, points[0].lat]
+      );
+
+      for (const point of points) {
+        bounds.extend([point.lon, point.lat]);
+      }
+
+      map.fitBounds(bounds, {
+        padding: 28,
+        duration: 0
+      });
     }
 
     function setRouteData(points) {
       routeData = Array.isArray(points) ? points : [];
 
-      if (!map) return;
+      if (!map || !isMapReady) {
+        return;
+      }
+
       clearMapObjects();
 
       if (!routeData.length) {
@@ -109,113 +335,121 @@
         return;
       }
 
-      const latLngs = routeData.map(point => [point.lat, point.lon]);
-      routeLine = L.polyline(latLngs, {
-        color: '#d45c6b',
-        weight: 5,
-        opacity: 0.9
-      }).addTo(map);
-
-      const first = routeData[0];
-      const last = routeData[routeData.length - 1];
-
-      startMarker = L.circleMarker([first.lat, first.lon], {
-        radius: 7,
-        color: '#22c55e',
-        weight: 2,
-        fillColor: '#22c55e',
-        fillOpacity: 0.9
-      }).addTo(map).bindTooltip('Start');
-
-      finishMarker = L.circleMarker([last.lat, last.lon], {
-        radius: 7,
-        color: '#ef4444',
-        weight: 2,
-        fillColor: '#ef4444',
-        fillOpacity: 0.9
-      }).addTo(map).bindTooltip('Finish');
-
-      map.fitBounds(routeLine.getBounds(), { padding: [28, 28] });
+      setSourceData('route', {
+        type: 'FeatureCollection',
+        features: [buildRouteFeature(routeData)]
+      });
+      setSourceData('route-endpoints', buildEndpointFeatures(routeData));
+      fitRoute(routeData);
       hideStatus();
+      applySelectedPoint();
     }
 
-    function setSelectedPoint(lat, lon, isPlaybackRunning, isManualScrubbing) {
-      if (!map) {
+    function applySelectedPoint() {
+      if (!map || !isMapReady) {
         return;
       }
+
+      const { lat, lon, isPlaybackRunning, isManualScrubbing } = selectedState;
 
       if (lat === null || lat === undefined || lon === null || lon === undefined) {
-        if (selectedMarker) {
-          map.removeLayer(selectedMarker);
-          selectedMarker = null;
-        }
+        setSourceData('selected-point', emptyFeatureCollection());
         return;
       }
 
-      if (!selectedMarker) {
-        selectedMarker = L.circleMarker([lat, lon], {
-          radius: 9,
-          color: '#f08a5d',
-          weight: 3,
-          fillColor: '#fb923c',
-          fillOpacity: 0.9
-        }).addTo(map);
-      } else {
-        selectedMarker.setLatLng([lat, lon]);
-      }
-
+      setSourceData('selected-point', buildSelectedPointFeature(lat, lon));
       schedulePanToSelectedPoint(lat, lon, isPlaybackRunning === true, isManualScrubbing === true);
     }
 
-    function schedulePanToSelectedPoint(lat, lon, isPlaybackRunning, isManualScrubbing) {
-      if (!map) {
+    function isPointWithinViewportPadding(target, paddingRatio) {
+      if (!map || !isMapReady) {
+        return true;
+      }
+
+      const projected = map.project(target);
+      const canvas = map.getCanvas();
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const minX = width * paddingRatio;
+      const maxX = width * (1 - paddingRatio);
+      const minY = height * paddingRatio;
+      const maxY = height * (1 - paddingRatio);
+
+      return projected.x >= minX
+        && projected.x <= maxX
+        && projected.y >= minY
+        && projected.y <= maxY;
+    }
+
+    function recenterOnTarget(target) {
+      if (!map || !isMapReady) {
         return;
       }
 
-      const target = L.latLng(lat, lon);
-      const currentBounds = map.getBounds();
-      const safeVisibleBounds = currentBounds.pad(-0.08);
-      const centeredBounds = currentBounds.pad(-0.35);
+      map.easeTo({
+        center: target,
+        duration: 0
+      });
+    }
 
-      if (safeVisibleBounds.isValid() && !safeVisibleBounds.contains(target)) {
-        map.panInside(target, {
-          paddingTopLeft: [96, 96],
-          paddingBottomRight: [96, 96],
-          animate: false
-        });
+    function schedulePanToSelectedPoint(lat, lon, isPlaybackRunning, isManualScrubbing) {
+      if (!map || !isMapReady) {
+        return;
       }
 
-      if (pendingPanTimer) {
-        clearTimeout(pendingPanTimer);
-        pendingPanTimer = null;
+      const target = [lon, lat];
+
+      if (!isPointWithinViewportPadding(target, 0.08)) {
+        recenterOnTarget(target);
       }
 
+      clearPendingPan();
       pendingPanTarget = target;
 
       if (isManualScrubbing) {
         return;
       }
 
-      if (centeredBounds.isValid() && centeredBounds.contains(target) && !isPlaybackRunning) {
+      if (isPointWithinViewportPadding(target, 0.35) && !isPlaybackRunning) {
         return;
       }
 
       const delay = isPlaybackRunning ? 70 : 100;
       pendingPanTimer = setTimeout(() => {
         pendingPanTimer = null;
-        if (!pendingPanTarget || !map) {
+        if (!pendingPanTarget || !map || !isMapReady) {
           return;
         }
 
-        map.panTo(pendingPanTarget, {
-          animate: false
-        });
+        recenterOnTarget(pendingPanTarget);
         pendingPanTarget = null;
       }, delay);
     }
 
+    function setSelectedPoint(lat, lon, isPlaybackRunning, isManualScrubbing) {
+      selectedState = {
+        lat,
+        lon,
+        isPlaybackRunning: isPlaybackRunning === true,
+        isManualScrubbing: isManualScrubbing === true
+      };
+
+      if (!map || !isMapReady) {
+        return;
+      }
+
+      applySelectedPoint();
+    }
+
     function clearRouteData() {
       routeData = [];
+      selectedState = {
+        lat: null,
+        lon: null,
+        isPlaybackRunning: false,
+        isManualScrubbing: false
+      };
+
       clearMapObjects();
       setStatus('Route is cleared. Load a CSV in the app.');
     }
