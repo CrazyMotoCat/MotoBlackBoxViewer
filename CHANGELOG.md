@@ -25,6 +25,12 @@
 - CSV import переведён на streaming read path
 - CSV parser поддерживает quoted values и embedded separators
 - malformed rows теперь учитываются в diagnostics и не ломают импорт, если в файле остаются валидные строки
+- partial logs теперь поддерживаются в first-pass варианте: missing `lean`/`accelX`/`accelY`/`accelZ` channels больше не ломают весь импорт
+- partial import report теперь показывает, сколько строк удалось импортировать из числа прочитанных
+- analytics теперь делает first-pass GPS outlier filtering для spike-return сценариев, чтобы distance и summary меньше искажались шумными точками
+- statistics теперь включают first-pass event detection для резких торможений и разгонов
+- statistics теперь дополнительно показывают peak lean magnitude и transition-based peak lean event count
+- statistics теперь включают first-pass stop/start pattern counters с гистерезисом по скорости
 - average speed теперь считается как time-weighted metric, а не как простое среднее по sample points
 - chart pipeline использует first-pass downsampling и slice-based reuse full-series buffers
 - range filtering использует contiguous slice вместо полного линейного сканирования
@@ -38,6 +44,11 @@
 ### Fixed
 
 - import теперь не схлопывается в пустое состояние, если все data rows невалидны: показывается явная ошибка
+- partial import diagnostics теперь явно показывают отсутствующие каналы, а не только malformed rows
+- import diagnostics теперь дают recovery hints для malformed CSV и честнее объясняют ограничения partial-import каналов
+- checked-in dirty CSV fixture закрепляет partial-import behavior regression-тестом
+- open/import command path больше не глотает load exceptions локально в `MainViewModel`; отмена и ошибки проходят через централизованную async-command обработку
+- import/open failure теперь также поднимается в явный верхнеуровневый user-facing dialog через notification service
 - session save failures больше не остаются только в trace-path
 - map export/open failures теперь отображаются в status text
 - embedded map больше не зависит от `file://` navigation path и использует local `https` host mapping

@@ -8,12 +8,17 @@ namespace MotoBlackBoxViewer.App.ViewModels;
 public sealed class MainViewModel : IDisposable
 {
     private readonly IFileDialogService _fileDialogService;
+    private readonly IUserNotificationService _notificationService;
     private bool _isDisposed;
 
-    public MainViewModel(TelemetryWorkspace workspace, IFileDialogService fileDialogService)
+    public MainViewModel(
+        TelemetryWorkspace workspace,
+        IFileDialogService fileDialogService,
+        IUserNotificationService notificationService)
     {
         Workspace = workspace;
         _fileDialogService = fileDialogService;
+        _notificationService = notificationService;
 
         OpenCsvCommand = new AsyncRelayCommand(OpenCsvFromDialogAsync);
         RefreshMapCommand = new RelayCommand(Workspace.RequestMapRefresh, () => Workspace.HasPoints);
@@ -68,8 +73,12 @@ public sealed class MainViewModel : IDisposable
         catch (OperationCanceledException)
         {
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _notificationService.ShowError(
+                "MotoBlackBoxViewer",
+                $"Не удалось открыть CSV-файл.\n\n{ex.Message}");
+            throw;
         }
     }
 

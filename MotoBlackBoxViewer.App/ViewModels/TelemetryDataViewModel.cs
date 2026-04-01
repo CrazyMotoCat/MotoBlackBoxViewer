@@ -143,7 +143,7 @@ public sealed class TelemetryDataViewModel : ObservableObject
         _state.CurrentFilePath = filePath;
         _state.FilterStartIndex = _state.AllPoints.Count == 0 ? 0 : 1;
         _state.FilterEndIndex = _state.AllPoints.Count;
-        SetImportDiagnosticsText(BuildImportDiagnosticsText(readResult));
+        SetImportDiagnosticsText(BuildVisibleImportDiagnosticsText(readResult));
 
         RaiseSourceDataProperties();
         RebuildVisibleData(preferredPoint: null, updateStatus: false);
@@ -368,6 +368,92 @@ public sealed class TelemetryDataViewModel : ObservableObject
 
         CsvTelemetryRowIssue firstIssue = readResult.RowIssues[0];
         return $"{summary} Первая проблема: строка {firstIssue.LineNumber} ({firstIssue.Reason})";
+    }
+
+    private static string BuildExtendedImportDiagnosticsText(CsvTelemetryReadResult readResult)
+    {
+        List<string> parts = [];
+
+        string existingDiagnostics = BuildRecoverableImportDiagnosticsText(readResult);
+        if (!string.IsNullOrWhiteSpace(existingDiagnostics))
+            parts.Add(existingDiagnostics);
+
+        if (readResult.MissingOptionalChannels.Count > 0)
+        {
+            parts.Add(
+                $"Отсутствуют каналы: {string.Join(", ", readResult.MissingOptionalChannels)}. " +
+                "Доступные данные загружены частично. Зависимые графики и метрики по этим каналам пока ограничены.");
+        }
+
+        if (readResult.MissingOptionalChannels.Count > 0)
+            parts.Add("Зависимые графики и метрики по отсутствующим каналам пока ограничены.");
+
+        string suffix = BuildVisibleImportDiagnosticsSuffix(readResult);
+        if (!string.IsNullOrWhiteSpace(suffix))
+            parts.Add(suffix);
+
+        return string.Join(" ", parts);
+    }
+
+    private static string BuildVisibleImportDiagnosticsText(CsvTelemetryReadResult readResult)
+    {
+        List<string> parts = [];
+
+        string importReport = BuildImportReportSummary(readResult);
+        if (!string.IsNullOrWhiteSpace(importReport))
+            parts.Add(importReport);
+
+        string existingDiagnostics = BuildRecoverableImportDiagnosticsText(readResult);
+        if (!string.IsNullOrWhiteSpace(existingDiagnostics))
+            parts.Add(existingDiagnostics);
+
+        if (readResult.MissingOptionalChannels.Count > 0)
+        {
+            parts.Add(
+                $"Отсутствуют каналы: {string.Join(", ", readResult.MissingOptionalChannels)}. " +
+                "Доступные данные загружены частично.");
+        }
+
+        string suffix = BuildVisibleImportDiagnosticsSuffix(readResult);
+        if (!string.IsNullOrWhiteSpace(suffix))
+            parts.Add(suffix);
+
+        return string.Join(" ", parts);
+    }
+
+    private static string BuildVisibleImportDiagnosticsSuffix(CsvTelemetryReadResult readResult)
+    {
+        if (readResult.MissingOptionalChannels.Count <= 0)
+            return string.Empty;
+
+        return "Зависимые графики и метрики по отсутствующим каналам пока ограничены.";
+    }
+
+    private static string BuildImportReportSummary(CsvTelemetryReadResult readResult)
+    {
+        bool hasRecoverableImportDiagnostics =
+            readResult.SkippedRowCount > 0 ||
+            readResult.MissingOptionalChannels.Count > 0;
+
+        if (!hasRecoverableImportDiagnostics || readResult.ReadRowCount <= 0)
+            return string.Empty;
+
+        return $"Импортировано {readResult.Points.Count} из {readResult.ReadRowCount} строк.";
+    }
+
+    private static string BuildRecoverableImportDiagnosticsText(CsvTelemetryReadResult readResult)
+    {
+        if (readResult.SkippedRowCount <= 0)
+            return string.Empty;
+
+        string summary = $"Пропущено {readResult.SkippedRowCount} проблемных строк при импорте.";
+        const string recoveryHint = "Проверьте разделитель ';', обязательные колонки и числовые значения в проблемных строках.";
+
+        if (readResult.RowIssues.Count == 0)
+            return $"{summary} {recoveryHint}";
+
+        CsvTelemetryRowIssue firstIssue = readResult.RowIssues[0];
+        return $"{summary} Первая проблема: строка {firstIssue.LineNumber} ({firstIssue.Reason}) {recoveryHint}";
     }
 
     private void RaiseVisibleDataProperties()

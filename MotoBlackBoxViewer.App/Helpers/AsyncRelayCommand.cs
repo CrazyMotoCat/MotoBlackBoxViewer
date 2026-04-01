@@ -35,6 +35,10 @@ public sealed class AsyncRelayCommand : ICommand
             RaiseCanExecuteChanged();
             await _execute();
         }
+        catch (OperationCanceledException)
+        {
+            Trace.TraceInformation("Async command execution was canceled.");
+        }
         catch (Exception ex)
         {
             Trace.TraceError($"Async command execution failed: {ex}");

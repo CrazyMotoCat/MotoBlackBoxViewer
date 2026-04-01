@@ -23,6 +23,7 @@ public partial class App : Application
             TelemetryDataProcessor dataProcessor = new(analyzer);
             IMapExportService mapExportService = new MapExportService();
             IFileDialogService fileDialogService = new FileDialogService();
+            IUserNotificationService notificationService = new MessageBoxNotificationService();
             IPlaybackService playbackService = new PlaybackService();
             IPlaybackCoordinator playbackCoordinator = new PlaybackCoordinator(playbackService);
             IAppSettingsService settingsService = new JsonAppSettingsService();
@@ -35,7 +36,7 @@ public partial class App : Application
                 playbackCoordinator,
                 sessionPersistenceCoordinator);
 
-            _mainViewModel = new MainViewModel(workspace, fileDialogService);
+            _mainViewModel = new MainViewModel(workspace, fileDialogService, notificationService);
 
             MainWindow mainWindow = new(_mainViewModel);
             MainWindow = mainWindow;

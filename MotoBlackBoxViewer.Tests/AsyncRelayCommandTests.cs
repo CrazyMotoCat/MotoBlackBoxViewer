@@ -17,6 +17,18 @@ public sealed class AsyncRelayCommandTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenDelegateIsCanceled_ReenablesCommand()
+    {
+        AsyncRelayCommand command = new(() => throw new OperationCanceledException("canceled"));
+
+        Assert.True(command.CanExecute(null));
+
+        await command.ExecuteAsync();
+
+        Assert.True(command.CanExecute(null));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenAlreadyRunning_DoesNotStartSecondExecution()
     {
         int executionCount = 0;

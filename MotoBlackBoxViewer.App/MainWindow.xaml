@@ -731,6 +731,42 @@
                                         <TextBlock Text="{Binding Workspace.Data.Statistics.MaxLeanDeg, StringFormat=F1}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Border>
+                                <Border Style="{StaticResource MetricCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="Р РµР·РєРёРµ С‚РѕСЂРјРѕР¶РµРЅРёСЏ" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.HardBrakingEventCount}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="Р РµР·РєРёРµ СЂР°Р·РіРѕРЅС‹" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.SharpAccelerationEventCount}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="Пик |угла|" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.PeakLeanAbsDeg, StringFormat=F1}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="Пиковые наклоны" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.PeakLeanEventCount}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="Остановки" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.StopEventCount}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Border>
+                                <Border Style="{StaticResource MetricCardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="Старты" Foreground="{StaticResource MutedTextBrush}" />
+                                        <TextBlock Text="{Binding Workspace.Data.Statistics.StartEventCount}" Foreground="{StaticResource TextBrushTheme}" FontSize="24" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Border>
                         </UniformGrid>
 
                         <StackPanel Grid.Row="2">

@@ -6,7 +6,7 @@
 
 Сейчас автотесты покрывают, в том числе:
 
-- CSV parsing, quoted values, encoding fallback и malformed-row diagnostics
+- CSV parsing, quoted values, encoding fallback, partial-import reports и malformed-row diagnostics
 - расчёт дистанции и telemetry statistics
 - time-weighted average speed и базовые regression-сценарии аналитики
 - session persistence, debounce/flush и error surfacing
@@ -38,11 +38,11 @@ dotnet test MotoBlackBoxViewer.Tests/MotoBlackBoxViewer.Tests.csproj /p:UseAppHo
 
 ## Текущий baseline
 
-- текущий checked baseline: `78 / 78`
+- текущий checked baseline: `90 / 90`
 - test project: `xUnit + Microsoft.NET.Test.Sdk + coverlet.collector`
 
 ## Заметки
 
-- часть chart/map тестов использует checked-in sample datasets
+- часть chart/map и dirty-CSV тестов использует checked-in sample datasets
 - часть app-layer тестов intentionally проверяет не только happy-path, но и failure/recovery сценарии
 - при заметных изменениях в покрытии этот файл должен обновляться вместе с `README.md`, `ROADMAP.md` и `CHANGELOG.md`

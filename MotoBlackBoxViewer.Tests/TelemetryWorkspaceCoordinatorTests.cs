@@ -11,6 +11,40 @@ namespace MotoBlackBoxViewer.Tests;
 public sealed class TelemetryWorkspaceCoordinatorTests
 {
     [Fact]
+    public async Task LoadCsvAsync_WhenImportIsPartial_AddsRecoveryHintsToDiagnostics()
+    {
+        using TestContext context = CreateContext(
+            new AppSessionSettings(),
+            reader: new StubCsvTelemetryReader(
+                CreatePoints(),
+                skippedRowCount: 1,
+                rowIssues: [new CsvTelemetryRowIssue(4, "Not enough columns.")],
+                missingOptionalChannels: ["accelX", "lean"]));
+
+        await context.Coordinator.LoadCsvAsync("ride.csv");
+
+        Assert.Contains("разделитель", context.Data.ImportDiagnosticsText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("графики", context.Data.ImportDiagnosticsText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task LoadCsvAsync_WhenReaderReportsMissingOptionalChannels_SurfacesPartialImportDiagnostics()
+    {
+        using TestContext context = CreateContext(
+            new AppSessionSettings(),
+            reader: new StubCsvTelemetryReader(
+                CreatePoints(),
+                missingOptionalChannels: ["accelX", "accelY", "accelZ", "lean"]));
+
+        await context.Coordinator.LoadCsvAsync("ride.csv");
+
+        Assert.Contains("Импортировано 3 из 3 строк", context.Data.StatusText);
+        Assert.Contains("accelX", context.Data.ImportDiagnosticsText);
+        Assert.Contains("lean", context.Data.ImportDiagnosticsText);
+        Assert.True(context.Data.HasImportDiagnostics);
+    }
+
+    [Fact]
     public async Task LoadCsvAsync_LoadsVisibleDataRefreshesMapAndPersistsSession()
     {
         using TestContext context = CreateContext(new AppSessionSettings());
@@ -471,19 +505,22 @@ public sealed class TelemetryWorkspaceCoordinatorTests
 
         private readonly int _skippedRowCount;
         private readonly IReadOnlyList<CsvTelemetryRowIssue> _rowIssues;
+        private readonly IReadOnlyList<string> _missingOptionalChannels;
 
         public StubCsvTelemetryReader(
             IReadOnlyList<TelemetryPoint> points,
             int skippedRowCount = 0,
-            IReadOnlyList<CsvTelemetryRowIssue>? rowIssues = null)
+            IReadOnlyList<CsvTelemetryRowIssue>? rowIssues = null,
+            IReadOnlyList<string>? missingOptionalChannels = null)
         {
             _points = points;
             _skippedRowCount = skippedRowCount;
             _rowIssues = rowIssues ?? Array.Empty<CsvTelemetryRowIssue>();
+            _missingOptionalChannels = missingOptionalChannels ?? Array.Empty<string>();
         }
 
         public Task<CsvTelemetryReadResult> ReadAsync(string filePath, CancellationToken cancellationToken = default)
-            => Task.FromResult(new CsvTelemetryReadResult(_points, _skippedRowCount, _rowIssues));
+            => Task.FromResult(new CsvTelemetryReadResult(_points, _skippedRowCount, _rowIssues, _missingOptionalChannels));
     }
 
     private sealed class ThrowingCsvTelemetryReader : ICsvTelemetryReader

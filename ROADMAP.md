@@ -71,15 +71,14 @@ CHANGELOG фиксирует уже сделанные заметные изме
 
 ### Data reliability
 
-- partial logs пока поддерживаются не полностью
+- first-pass partial logs support уже есть, но нужна более глубокая per-channel degradation story для downstream analytics/export
 - richer CSV recovery flow пока не реализован
-- нужна более прозрачная import diagnostics story
+- нужна более глубокая import diagnostics story: aggregate import report, richer recovery hints и дальнейшее расширение golden-sample coverage
 
 ### Analytics
 
-- нужен GPS/sensor outlier filtering
-- нужны richer derived metrics
-- нужны event-oriented сценарии анализа: hard braking, peak lean, acceleration events
+- first-pass GPS outlier filtering уже есть, но нужен более глубокий GPS/sensor smoothing и richer outlier handling
+- first-pass event detection уже есть для hard braking, sharp acceleration, peak lean и stop/start patterns, но нужны richer derived metrics и более глубокие event-oriented workflows
 
 ### Performance
 
@@ -114,9 +113,9 @@ CHANGELOG фиксирует уже сделанные заметные изме
   - сколько пропущено
   - почему они пропущены
   - какие каналы отсутствуют
-- поддержать graceful degradation для partial logs
+- расширить first-pass graceful degradation для partial logs до downstream analytics/export semantics
 - расширить user-visible diagnostics в UI
-- добавить golden-sample regression fixtures для грязных CSV и больших файлов
+- расширить checked-in golden-sample regression fixtures для грязных CSV и больших файлов
 
 ### Success signal
 
@@ -136,8 +135,7 @@ CHANGELOG фиксирует уже сделанные заметные изме
 - добавить event detection:
   - hard braking
   - sharp acceleration
-  - peak lean
-  - stop/start patterns
+  - richer stop/start semantics
 - разделить raw vs cleaned interpretation там, где это важно
 - расширить тесты на корректность метрик
 
@@ -254,8 +252,8 @@ CHANGELOG фиксирует уже сделанные заметные изме
 
 - продолжить hardening streaming CSV reader path
 - расширить import report и malformed-row diagnostics
-- поддержать partial logs с graceful degradation
-- добавить golden-sample dirty CSV tests
+- расширить partial logs support beyond current first-pass channel degradation
+- расширить dirty CSV golden-sample coverage beyond current first fixture
 - улучшить recovery messaging в UI
 
 ### v15 — Correct Analytics
