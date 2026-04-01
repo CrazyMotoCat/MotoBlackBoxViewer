@@ -24,17 +24,20 @@ public sealed class TelemetryWorkspace : ObservableObject, IDisposable
         Selection = new TelemetrySelectionViewModel(Data, _state);
         Playback = new TelemetryPlaybackViewModel(Data, Selection, playbackCoordinator);
         Map = new TelemetryMapViewModel(Data, Selection, mapExportService, _state);
+        ChartProfiling = new TelemetryChartProfilingViewModel(_state);
         _coordinator = new TelemetryWorkspaceCoordinator(
             Data,
             Selection,
             Playback,
             Map,
+            ChartProfiling,
             _state,
             sessionPersistenceCoordinator);
 
         Data.PropertyChanged += Data_PropertyChanged;
         Selection.PropertyChanged += Selection_PropertyChanged;
         Playback.PropertyChanged += Playback_PropertyChanged;
+        ChartProfiling.PropertyChanged += ChartProfiling_PropertyChanged;
     }
 
     public TelemetryDataViewModel Data { get; }
@@ -44,6 +47,8 @@ public sealed class TelemetryWorkspace : ObservableObject, IDisposable
     public TelemetryPlaybackViewModel Playback { get; }
 
     public TelemetryMapViewModel Map { get; }
+
+    public TelemetryChartProfilingViewModel ChartProfiling { get; }
 
     public bool HasPoints => Data.HasPoints;
 
@@ -64,6 +69,8 @@ public sealed class TelemetryWorkspace : ObservableObject, IDisposable
     public void RequestMapRefresh() => Map.RequestRefresh();
 
     public void OpenMapInBrowser() => _coordinator.OpenMapInBrowser();
+
+    public void ToggleChartProfiling() => _coordinator.ToggleChartProfiling();
 
     public bool MoveSelection(int delta)
         => Selection.MoveSelection(delta);
@@ -89,6 +96,9 @@ public sealed class TelemetryWorkspace : ObservableObject, IDisposable
     private void Playback_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         => _coordinator.HandlePlaybackPropertyChanged(e.PropertyName);
 
+    private void ChartProfiling_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        => _coordinator.HandleChartProfilingPropertyChanged(e.PropertyName);
+
     public void Dispose()
     {
         if (_isDisposed)
@@ -98,8 +108,10 @@ public sealed class TelemetryWorkspace : ObservableObject, IDisposable
         Data.PropertyChanged -= Data_PropertyChanged;
         Selection.PropertyChanged -= Selection_PropertyChanged;
         Playback.PropertyChanged -= Playback_PropertyChanged;
+        ChartProfiling.PropertyChanged -= ChartProfiling_PropertyChanged;
         Map.Dispose();
         Selection.Dispose();
         Playback.Dispose();
+        ChartProfiling.Dispose();
     }
 }

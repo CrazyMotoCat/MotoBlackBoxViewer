@@ -17,6 +17,7 @@ public sealed class SessionPersistenceCoordinatorTests
             FilterStartIndex = 1,
             FilterEndIndex = 42,
             ChartWindowRadius = 200,
+            IsChartProfilingEnabled = true,
             PlaybackPosition = 3
         };
 
@@ -30,6 +31,7 @@ public sealed class SessionPersistenceCoordinatorTests
 
         Assert.Single(settingsService.SavedSnapshots);
         Assert.Equal(5, settingsService.SavedSnapshots[0].SelectedVisiblePosition);
+        Assert.True(settingsService.SavedSnapshots[0].IsChartProfilingEnabled);
     }
 
     [Fact]
@@ -61,10 +63,12 @@ public sealed class SessionPersistenceCoordinatorTests
     {
         var settingsService = new ThrowingAppSettingsService();
         Exception? reportedError = null;
+        Exception? raisedEventError = null;
         var coordinator = new SessionPersistenceCoordinator(
             settingsService,
             TimeSpan.FromMilliseconds(20),
             errorHandler: ex => reportedError = ex);
+        coordinator.SaveFailed += ex => raisedEventError = ex;
         var state = new TelemetrySessionState
         {
             CurrentFilePath = "ride.csv",
@@ -77,6 +81,8 @@ public sealed class SessionPersistenceCoordinatorTests
 
         Assert.NotNull(reportedError);
         Assert.IsType<IOException>(reportedError);
+        Assert.NotNull(raisedEventError);
+        Assert.IsType<IOException>(raisedEventError);
     }
 
     [Fact]
@@ -84,9 +90,11 @@ public sealed class SessionPersistenceCoordinatorTests
     {
         var settingsService = new ThrowingAppSettingsService();
         Exception? reportedError = null;
+        Exception? raisedEventError = null;
         var coordinator = new SessionPersistenceCoordinator(
             settingsService,
             errorHandler: ex => reportedError = ex);
+        coordinator.SaveFailed += ex => raisedEventError = ex;
         var state = new TelemetrySessionState
         {
             CurrentFilePath = "ride.csv",
@@ -98,6 +106,8 @@ public sealed class SessionPersistenceCoordinatorTests
         Assert.Null(exception);
         Assert.NotNull(reportedError);
         Assert.IsType<IOException>(reportedError);
+        Assert.NotNull(raisedEventError);
+        Assert.IsType<IOException>(raisedEventError);
     }
 
     private sealed class RecordingAppSettingsService : IAppSettingsService
@@ -114,6 +124,7 @@ public sealed class SessionPersistenceCoordinatorTests
                 FilterStartIndex = settings.FilterStartIndex,
                 FilterEndIndex = settings.FilterEndIndex,
                 SelectedChartWindowRadius = settings.SelectedChartWindowRadius,
+                IsChartProfilingEnabled = settings.IsChartProfilingEnabled,
                 SelectedPlaybackSpeedLabel = settings.SelectedPlaybackSpeedLabel,
                 SelectedVisiblePosition = settings.SelectedVisiblePosition
             });

@@ -1,603 +1,322 @@
 # MotoBlackBoxViewer Roadmap
 
-## Purpose
-
-This document is a compact project brief for future chats and work sessions.
-It captures what the project already does, how it is structured today, and
-which next steps are most valuable.
-
-Working rule:
-
-* all meaningful project changes should also be reflected in `README.md` and `ROADMAP.md`
-
-## Project Snapshot
-
-* Stack: C# / .NET 10 / WPF
-* Solution: `MotoBlackBoxViewer.sln`
-* Main app: `MotoBlackBoxViewer.App`
-* Domain/core logic: `MotoBlackBoxViewer.Core`
-* Tests: `MotoBlackBoxViewer.Tests`
-* Primary goal: view and analyze motorcycle telemetry logs exported as CSV
-
-## Current Product Scope
-
-The app already supports:
-
-* CSV import with `;` separator
-  ⚠️ Review note: parser now handles quoted values and embedded separators,
-  but still skips malformed rows and loads the whole file into memory.
-* Russian and English column aliases
-* UTF-8 with CP1251 fallback
-  ⚠️ Review note: fallback now reacts to decoding failures instead of a broad
-  catch, but the loading path is still full-file and non-streaming.
-* telemetry table
-* speed, lean angle, and acceleration charts
-* route display on embedded map via WebView2
-* linked selection between table, charts, and map
-* playback controls with multiple speed presets
-  Review note: presets now extend through `8x` and `16x` for faster route scrubbing.
-* point range filtering
-* chart viewport mode around the current point:
-  * `50` before / `50` after
-  * `100` before / `100` after
-  * `200` before / `200` after
-  * `500` before / `500` after
-  * `1000` before / `1000` after
-  * `5000` before / `5000` after
-  * full visible range
-* route export to HTML map
-* embedded map follow behavior now separates:
-  * `Playback`: map follows the selected point
-  * manual scrub: marker updates immediately, map recenters after drag settles
-  ⚠️ Review note: export and runtime route sync already use a safer JSON-string
-  bridge, but long-route payload cost is still an open performance topic.
-* session restore for last file, filter, speed, and playback position
-  ⚠️ Review note: save is now debounce-based and supports `Flush(...)`, which
-  reduces noisy synchronous writes during normal UI interaction.
-
-## Architecture Map
-
-### Core
-
-`MotoBlackBoxViewer.Core` contains the reusable telemetry logic:
-
-* `Services/CsvTelemetryReader.cs`
-* `Services/TelemetryAnalyzer.cs`
-* `Models/TelemetryPoint.cs`
-* `Models/TelemetryStatistics.cs`
-
-This is the cleanest part of the codebase and the best place for additional
-domain rules, parsers, calculations, and deterministic tests.
-
-⚠️ Review note:
-
-* CSV reader is more resilient now, but it still:
-  * loads full file into memory
-  * silently skips malformed rows
-* `TelemetryAnalyzer` uses simple averages (e.g. speed), which are not
-  time-weighted and may produce inaccurate results for uneven sampling
-
-TODO:
-
-* introduce streaming CSV parsing
-* add explicit validation/logging for malformed rows
-* consider time-based or distance-based averaging
-
-### App
-
-`MotoBlackBoxViewer.App` is a WPF shell around the core logic.
-
-Key areas:
-
-* `ViewModels/MainViewModel.cs`
-  Thin command layer for the window.
-* `ViewModels/TelemetryWorkspace.cs`
-  Root screen-level composition object.
-* `ViewModels/TelemetryDataViewModel.cs`
-  Loading, filtering, chart/table-facing data, statistics.
-* `ViewModels/TelemetrySelectionViewModel.cs`
-  Selected point and playback-position synchronization.
-* `ViewModels/TelemetryPlaybackViewModel.cs`
-  Playback state and interaction with the playback coordinator.
-* `ViewModels/TelemetryMapViewModel.cs`
-  Map JSON, selected marker, map export and refresh.
-* `Services/TelemetryWorkspaceCoordinator.cs`
-  Main cross-cutting orchestration layer between data, selection, playback,
-  map, and session persistence.
-* `Services/TelemetryWorkspaceSynchronizationService.cs`
-  Small app-layer service for visible-data / selection / map synchronization
-  steps used by load, restore, filter, and clear flows.
-* `Services/TelemetryWorkspacePersistenceService.cs`
-  Small app-layer service for deduplicated save / flush session orchestration.
-* `Services/TelemetryWorkspaceLoadService.cs`
-  Small app-layer service for CSV loading scenario orchestration.
-* `Services/TelemetryWorkspaceSessionRestoreService.cs`
-  Small app-layer service for last-session restore orchestration.
-* `Services/TelemetryWorkspaceInteractionService.cs`
-  Small app-layer service for clear/reset/playback/map-open and reactive
-  workspace event flows.
-
-Supporting services and abstractions already exist for:
-
-* playback
-* file picking
-* map export
-* app settings persistence
-* session persistence
-
-⚠️ Review note:
-
-* coordination layer is already the main complexity hotspot and may become a
-  "god service" if not controlled
-* async handling is safer now around load/restore/command/map paths, but it is
-  still not a fully solved cross-app concern
-
-TODO:
-
-* consider splitting coordinator into scenario-specific services earlier
-* continue improving explicit async error surfacing in UI-facing flows
-
-### Tests
-
-Current automated coverage focuses on the most stable logic:
-
-* CSV parsing
-* encoding handling
-* numeric parsing
-* distance calculation
-* telemetry statistics
-* session persistence coordination
-* app-layer loading/filtering consistency
-* selection/map disposal behavior
-* coordinator load/restore/reset/clear/playback flows
-* map script escaping
-* async command reentrancy/error recovery
-
-At the time of writing there are 64 unit tests across 14 test files, and
-`dotnet test MotoBlackBoxViewer.sln` is green locally on `.NET 10`.
-Additional note: the current checked baseline is `64 / 64` green via
-`dotnet test MotoBlackBoxViewer.Tests\MotoBlackBoxViewer.Tests.csproj /p:UseAppHost=false`
-when the desktop app binary is already running and locks the normal app output.
-
-⚠️ Review note:
-Missing coverage for:
-
-* large files
-* performance-sensitive paths
-* end-to-end map export content
-* richer runtime map sync scenarios
-
-TODO:
-
-* extend tests toward real-world failure scenarios, not only happy paths
-* keep growing large-log smoke coverage around chart and map-heavy workflows
-
-## Current Technical Shape
-
-The codebase is in a good intermediate state:
-
-* `MainWindow` is thin
-* screen responsibilities are split into several view models
-* infrastructure is abstracted behind interfaces
-* session restore exists
-* `LoadCsvAsync()` now rebuilds visible data immediately, so the data view model
-  does not sit in a partially loaded state after file import
-* range filtering now slices contiguous point ranges instead of scanning the
-  whole log with a linear `Where(...)`
-* `TelemetrySelectionViewModel` and `TelemetryMapViewModel` now release their
-  event subscriptions during workspace disposal
-* session persistence now debounce-saves, supports `Flush(...)`, and reports
-  save failures through trace/error callbacks
-* `TelemetryWorkspaceCoordinator` now suppresses internal reactive save echoes
-  while it is applying load/filter/reset/clear synchronization itself
-* `TelemetryWorkspaceCoordinator` now also avoids sending identical
-  session-save snapshots repeatedly during the same UI flow
-* some coordinator responsibilities are now starting to move outward into
-  narrower helpers:
-  * `TelemetryWorkspaceSynchronizationService`
-  * `TelemetryWorkspacePersistenceService`
-  * `TelemetryWorkspaceLoadService`
-  * `TelemetryWorkspaceSessionRestoreService`
-  * `TelemetryWorkspaceInteractionService`
-* chart rendering now supports a focused viewport around the selected point,
-  which keeps redraw cost bounded on large logs.
-* chart rendering now also applies a first-pass render-time downsampling step
-  and skips redundant redraws when the effective render state has not changed
-* filtered chart series now reuse full-series buffers through slice views,
-  which avoids rebuilding chart arrays from telemetry points on every filter
-  change
-* chart pipeline now emits lightweight performance diagnostics for large
-  visible-data builds and downsampling passes through `Trace`
-* `CreateVisibleData(...)` now also avoids materializing visible-position
-  dictionaries for contiguous ranges, and telemetry statistics are computed in
-  a single analyzer pass instead of repeated LINQ scans
-* chart tests now include large-log smoke coverage using the checked-in
-  `example_log_35000dots.csv` dataset
-* runtime map payloads are now downsampled before being sent into WebView2,
-  while selected-point sync uses live coordinates instead of relying on the
-  route payload to contain every original index.
-* map follow behavior is now mode-aware, so playback and manual slider scrub do
-  not force the same recentering strategy.
-* `TelemetrySelectionViewModel` now refreshes derived selection state from
-  actual visible-data changes instead of intermediate filter-summary churn
-* CSV loading now handles quoted values and stricter encoding fallback
-* CSV header matching now tolerates more normalized Russian accel aliases
-* the solution now targets `.NET 10`, with `global.json` pinning SDK `10.0.201`
-* map export and runtime WebView2 route sync now use safer JSON-to-JS bridging
-* `MapViewControl` caches applied route/refresh/selection state and coalesces
-  pending map updates to avoid redundant pushes
-* the embedded map now navigates via a local `https` WebView2 host mapping
-  instead of `file://`, which keeps runtime tile loading compatible with the
-  current OpenStreetMap tile policy requiring a valid `Referer`
-* runtime OpenStreetMap tile requests are now intercepted inside WebView2 and
-  served through a local disk-backed cache/proxy layer before falling back to
-  normal network loading
-* this reduces repeated tile fetch churn during aggressive scrubbing and when
-  revisiting the same route areas across sessions
-* tests cover core parsing, analytics, session persistence, and a growing part
-  of the app-layer behavior, including workspace-level guardrails against
-  duplicate session persistence during internal synchronization
-* the test project now targets `net10.0-windows`, which keeps the WPF app
-  reference buildable inside the test solution
-* `System.Text.Encoding.CodePages` package references were removed after the
-  `.NET 10` migration because the solution builds and tests cleanly without them
-
-The main remaining complexity is not in the window anymore, but in screen
-coordination and UI workflow orchestration.
-
-⚠️ Review note:
-
-* chart rendering still performs full redraws and data reconstruction on updates,
-  which may degrade performance on large datasets
-
-## Current UX Direction
-
-The project is now past the baseline technical stabilization stage and has
-entered a UI polish pass.
-
-Current design direction:
-
-* keep the app dark, but shift large surfaces toward neutral graphite instead of
-  heavy dark red
-* treat burgundy/red as an accent color, not as the primary base background
-* compress top-level controls into denser desktop-style control rows
-* make playback and range filtering visually tighter and easier to scan
-* reduce visual weight of map overlays and supporting chrome
-
-Recent review feedback to carry forward:
-
-* the current red-heavy palette still feels too dense on large surfaces
-* the toolbar needs clearer primary vs. secondary action hierarchy
-* the playback row should read as one cohesive control strip
-* the range filter block should be shorter and more information-dense
-* map overlay cards should become lighter and more typographically refined
-
-Additional UI review backlog from the latest pass:
-
-* lighten map overlay cards further:
-  * reduce overlay fill density
-  * soften shadows
-  * trim inner padding slightly
-  * weaken secondary text contrast
-* improve information hierarchy inside the selected-point card:
-  * point id strongest
-  * speed / lean secondary
-  * coordinates / accel / distance tertiary
-* refine right-side tabs and content panel seam:
-  * lighter active tab surface
-  * less heavy selected fill
-  * cleaner relation between tab bar and content area
-* unify the selected-state accent across map, charts, grid, and playback readouts
-* calm the points table further:
-  * weaker grid lines
-  * softer hover
-  * clearer separation between hover and selected row
-  * stronger selected-row affordance, ideally including a left accent rail
-  * better numeric alignment
-* keep tightening the playback strip:
-  * reduce emphasis on the static "Playback" label and speed summary
-  * make the slider the primary visual anchor
-  * make transport buttons and speed dropdown more secondary
-  * tighten alignment between slider, summary text, and speed selector
-* bring the range-filter block to a more unified rhythm:
-  * stricter alignment for "from / to"
-  * clearer number styling
-  * less dominant reset action
-  * slightly stronger range summary readability
-* make chart tabs cleaner by moving summary metrics into explicit info rows above plots
-* make the statistics tab feel more complete by filling the lower area with secondary metrics or selected-point-vs-range comparisons
-* lighten and regularize session summary + status bar copy:
-  * stronger filename, weaker metadata
-  * more product-like status messages instead of debug/log phrasing
-* verify radius consistency and 8px-grid spacing across panels, cards, tabs, and control strips
-
-Current pass status:
-
-* the second UI pass has been implemented in the current baseline:
-  * graphite-first large surfaces
-  * accent-only burgundy emphasis
-  * denser toolbar / playback / range-filter layout
-  * lighter map cards
-  * improved contrast for tabs, combo boxes, and selected table rows
-* a follow-up UI review pass is now also part of the baseline:
-  * selected-state accent is more unified across grid, charts, playback, and selected-point readouts
-  * points table is calmer, with right-aligned numeric data and a left accent rail on the selected row
-  * the selected-point card now has clearer hierarchy
-  * playback strip now treats the slider as the main visual anchor
-  * chart tabs now use explicit info rows above plots
-  * statistics tab now fills the lower area with selected-point/session context
-  * session summary and status bar copy are lighter and more product-like
-  * duplicated summaries have been removed from the map area:
-    * no duplicate selected-point info card on top of the map
-    * no persistent `route loaded` overlay after successful map load
-    * no duplicate file/range summary in the top toolbar area or bottom status bar
-  * the helper card near the map now uses more user-friendly guidance copy
-
-## Highest-Value Hotspots
-
-These are the places most likely to matter in future work:
-
-1. `MotoBlackBoxViewer.App/ViewModels/TelemetryDataViewModel.cs`
-   This is currently the largest view model and owns several responsibilities:
-   loading results, filter state, visible data, statistics, and chart inputs.
-
-   ⚠️ Review note:
-
-   * mixes data preparation and presentation concerns
-   * rebuilds arrays frequently (`ToArray()` patterns)
-
-2. `MotoBlackBoxViewer.App/Services/TelemetryWorkspaceCoordinator.cs`
-   This is now the main scenario coordinator and a likely growth point for
-   future complexity.
-
-   ⚠️ Review note:
-
-   * risk of becoming central bottleneck for all flows
-   * one small pain point is now improved: internal selection/filter sync no
-     longer fans out into duplicate persistence calls through workspace events
-
-3. `MotoBlackBoxViewer.App/ViewModels/TelemetrySelectionViewModel.cs`
-   Selection sync is central to table, charts, map, and playback behavior.
-
-4. `MotoBlackBoxViewer.App/Controls/ChartRenderHelper.cs`
-   Custom chart rendering may become harder to evolve once more visual features
-   or interactions are added.
-
-   ⚠️ Review note:
-
-   * current rendering approach still has headroom on very large point counts
-   * a first-pass downsampling path now exists, and filtered chart series now
-     reuse full-series buffers through slice views
-   * full redraw still happens when the effective render state changes
-
-## Review Backlog
-
-These review notes still look valid and should stay visible for future work:
-
-* `TelemetrySessionState` is still a mixed bag of domain state, UI state, and
-  transient flags; it likely wants to be split over time.
-* `TelemetrySeriesSnapshot` removed repeated getter work, but filter changes
-  still rebuild all chart arrays and chart definitions each time.
-* the WPF to WebView2 bridge is safer now, but still sends full serialized route
-  payloads into `ExecuteScriptAsync`, which may become expensive for long routes.
-* the CSV reader is more robust about quoting and encoding fallback now, but it
-  still skips malformed rows and reads the whole file into memory.
-* the core telemetry model is still intentionally narrow and may need to grow
-  before richer ride analysis, event detection, or multi-session comparison.
-
-➕ Additional review notes:
-
-* CSV parsing silently skips malformed rows instead of reporting them
-* analytics currently use simple averages instead of time-aware metrics
-* chart rendering now has an initial large-dataset optimization pass, but it
-  still needs deeper work for very large logs and broader performance coverage
-* async flows are safer in some critical paths now, but broader end-to-end UI
-  coverage and clearer surfacing are still needed
-
-## Recommended Roadmap
-
-### Phase 1: Stabilize Screen Coordination
-
-Goal: make UI behavior easier to reason about and safer to extend.
-
-Suggested work:
-
-* reduce responsibility inside `TelemetryWorkspaceCoordinator`
-* extract explicit user-scenario flows where useful
-* make filter/apply/reset/restore flows easier to trace
-* continue splitting `TelemetrySessionState` into narrower state holders once
-  the next round of coordination refactors begins
-* add more tests around synchronization behavior between:
-  data, selection, playback, map, and session restore
-  Note: a first coordinator-level safety net now exists, but it is still far
-  from exhaustive.
-
-Success signal:
-
-* fewer side effects hidden in property-change handlers
-* easier to change one screen area without breaking another
-
-### Phase 2: Strengthen Test Coverage Around App Layer
-
-Goal: protect refactors in the UI orchestration layer.
-
-Suggested work:
-
-* add tests for filter range behavior
-* add tests for selected-point restoration
-* add tests for playback start/stop/speed changes
-* add tests for clear/reset flows
-* add tests for map refresh/export triggers where possible through interfaces
-* add tests around workspace disposal and cross-viewmodel event wiring
-* extend coordinator tests down to edge cases and failure paths, not only happy
-  path scenarios
-* keep adding workspace-level tests that verify coordinator-driven state changes
-  do not re-enter persistence or other side effects accidentally
-
-➕ Add:
-
-* deepen tests for large datasets and performance-sensitive paths beyond the
-  first large-log smoke coverage now in place
-* more runtime map sync tests beyond escaping-only checks
-
-Success signal:
-
-* refactors in `App` become much safer
-* regressions are caught without manual UI testing every time
-
-### Phase 3: Expand Filtering and Analysis Features
-
-Goal: improve usefulness for real telemetry review sessions.
-
-Suggested work:
-
-* filtering not only by point index but also by:
-  speed, lean angle, acceleration ranges
-* derived metrics and richer statistics
-* comparison of multiple rides/logs
-* better summaries for selected ranges
-* revisit chart-series recalculation cost if filters become more interactive
-
-➕ Add:
-
-* introduce time-weighted statistics
-* add outlier filtering for GPS and sensor noise
-
-Success signal:
-
-* the app becomes useful not just for viewing a log, but for investigating it
-
-### Phase 4: Improve Map and Export Story
-
-Goal: make route review and sharing more practical.
-
-Suggested work:
-
-* export screenshots or richer report artifacts
-* improve map interactions and selected-point feedback
-* consider offline map mode
-* consider saved report bundles for sharing a session
-* reduce route payload size or move to incremental map updates if long-route
-  performance becomes visible
-* extend the new local OSM tile cache/proxy with cache eviction, diagnostics,
-  and clearer offline behavior
-
-Success signal:
-
-* map output is useful both inside the app and outside it
-* large logs no longer cause visible tile churn or repeated network-bound
-  redraw stalls during map navigation
-
-### Phase 5: Polish Product UX
-
-Goal: move from capable prototype to smoother daily-use desktop tool.
-
-Suggested work:
-
-* keep iterating on the new UI baseline rather than reverting it:
-  * preserve graphite-first palette
-  * preserve accent-only burgundy usage
-  * preserve denser toolbar and control rows
-  * preserve lighter map cards
-* prioritize polish that directly strengthens the core linked-selection workflow:
-  * unify selected-state accent across table, charts, map, and playback
-  * make playback slider the dominant navigation control
-  * make selected rows / markers / current-point readouts instantly scannable
-* continue softening support chrome around the data:
-  * lighter map overlays
-  * calmer table treatment
-  * cleaner tab active state
-  * more compact session summary and status bar
-* finish consistency cleanup:
-  * shared corner-radius rules
-  * stricter 8px-grid spacing
-  * more consistent typography hierarchy in cards and summaries
-* explicit settings screen
-* clearer empty/loading/error states
-* better large-file responsiveness
-* import history or recent files
-* clearer status messaging and recovery guidance
-* improve save/load error surfacing so persistence failures are user-visible,
-  not only traced internally
-
-Success signal:
-
-* fewer confusing states during normal use
-* less friction for returning users
-
-## Suggested Immediate Priorities
-
-If continuing development soon, the best order is:
-
-1. Add more app-layer tests around selection, playback, restore, and clear
-   flows on top of the new baseline coverage.
-2. Refactor `TelemetryWorkspaceCoordinator` into smaller scenario-focused
-   pieces if its responsibilities keep growing.
-3. Split `TelemetrySessionState` if new coordination or persistence fields keep
-   accumulating.
-4. Only then expand user-facing features like advanced filters or multi-file
-   comparison.
-
-➕ Add:
-5. Introduce streaming CSV parsing and malformed-row diagnostics before
-   expanding data sources.
-
-## Good First Refactors
-
-These are relatively high leverage:
-
-* introduce small scenario services for:
-  load session, apply filter, synchronize selection, persist session
-* separate chart data preparation from generic data-state handling
-* make session restore flow independently testable without broad UI wiring
-* consider a streaming CSV path before adding multi-file import or
-  less-controlled telemetry sources
-
-➕ Add:
-
-* deepen the new chart downsampling strategy with smarter profiling and tests
-
-## Known Environment Notes
-
-* The solution targets `.NET 10`
-* The WPF app targets `net10.0-windows`
-* Running or testing locally requires a .NET SDK in the environment
-* Embedded map uses WebView2
-* Map tiles rely on internet access because they come from OpenStreetMap
-* Runtime map tiles now use a local disk cache/proxy layer inside WebView2, but
-  exported HTML opened in an external browser still relies on direct OSM access
-* The runtime HTML map now uses `MapLibre GL JS` as the browser-side map engine
-
-## Quick Context For Next Chat
-
-If you need to rehydrate context quickly in a future conversation:
-
-* This is a WPF telemetry viewer for motorcycle CSV logs.
-* The repo is now pinned to SDK `10.0.201` via `global.json`.
-* The repository is already refactored away from a fat `MainWindow`.
-* The current architectural center is `TelemetryWorkspace` plus
-  `TelemetryWorkspaceCoordinator`.
-* `origin/main` already contains:
-  * UI cleanup for map summary duplication
-  * coordinator helper-service split
-  * expanded app-layer test safety net
-* The current test baseline is `64 / 64` green on the test project run, and the
-  full solution run still requires the app binary not to be locked by a running
-  desktop instance.
-* The latest map-side resilience step is already in place: runtime OSM tiles go
-  through a local disk cache/proxy layer in `MapViewControl`.
-* Chart viewport mode now has smaller `50 / 100 / 200` options and the selected
-  chart window is restored from session settings across app restarts.
-* A first chart-performance pass is also in place: render-time downsampling and
-  redundant-redraw suppression now reduce chart cost on large visible ranges.
-* The chart test baseline now also includes large-log smoke coverage against the
-  checked-in `example_log_35000dots.csv` example dataset.
-* The deeper chart pipeline now also exposes lightweight perf instrumentation so
-  large-range processing can be observed through `Trace` and test listeners.
-* `CreateVisibleData(...)` now also benefits from a lazy contiguous
-  visible-position map and a single-pass analyzer implementation.
-* The most likely next engineering task is to keep improving
-  orchestration/testability, then deepen the tile cache with lifecycle and
-  offline-friendly behavior if map UX still needs more work.
-* The most likely next product task is richer filtering and analysis, but only
-  after the app layer gets a bit more regression safety.
+## Назначение
+
+Этот документ фиксирует **куда проект идёт дальше**: ключевые приоритеты, технические долги, последовательность работ и критерии успеха.
+
+README описывает текущее состояние проекта.
+ROADMAP описывает будущие изменения и приоритеты.
+CHANGELOG фиксирует уже сделанные заметные изменения.
+
+## Правило обновления документации
+
+При заметных изменениях в проекте придерживаемся такого правила:
+
+- `CHANGELOG.md` дополняем новыми изменениями, сохраняя текущую структуру и стиль, без радикальной переработки истории
+- `README.md` обновляем только для значимых изменений проекта, которые действительно важны для внешнего описания, запуска, ограничений или возможностей
+- `ROADMAP.md` используем для сверки с будущими планами, новыми долгами и приоритетами; уже реализованные пункты из него убираем или переводим в другие документы при необходимости
+
+## Продуктовая цель
+
+Развивать MotoBlackBoxViewer как удобный desktop-инструмент для анализа мото-телеметрии, в котором:
+
+- реальные CSV-логи открываются надёжно
+- аналитике можно доверять
+- большие сессии остаются отзывчивыми
+- карта, графики и playback работают как единое связанное пространство
+- архитектура остаётся сопровождаемой при росте функциональности
+
+## Текущие приоритеты
+
+### P0 — Надёжность данных и честность аналитики
+
+- добить устойчивость CSV import для грязных и частично неполных логов
+- улучшить import diagnostics и recovery flows
+- добавить outlier filtering для GPS/сенсорных данных
+- расширить набор корректных derived metrics и event detection
+- сделать поведение аналитики понятным и воспроизводимым
+
+### P1 — Производительность и контроль сложности
+
+- продолжить дробление `TelemetryWorkspaceCoordinator`
+- сократить лишние materialization/copy operations в chart/data pipeline
+- развить perf-budget подход для import / charts / map refresh
+- закрыть наиболее тяжёлые сценарии на больших логах
+
+### P2 — Практическая ценность продукта
+
+- расширить фильтрацию
+- улучшить map/export story
+- добавить multi-session comparison
+- сделать UX более продуктовым и менее “debug-oriented”
+
+## Принципы
+
+1. **Correctness before cosmetics**
+   Красивый график бесполезен, если метрика считается неверно.
+
+2. **Graceful degradation**
+   Частично проблемный лог должен открываться настолько полно, насколько это возможно.
+
+3. **Performance is a feature**
+   Большие поездки не должны превращать UI в тяжёлую отладочную оболочку.
+
+4. **Explicit orchestration beats hidden side effects**
+   Чем меньше неявной реактивной магии между screen-level объектами, тем проще сопровождение.
+
+5. **Docs must stay aligned with code**
+   README, ROADMAP и CHANGELOG не должны спорить между собой.
+
+## Ключевые зоны долга
+
+### Data reliability
+
+- partial logs пока поддерживаются не полностью
+- richer CSV recovery flow пока не реализован
+- нужна более прозрачная import diagnostics story
+
+### Analytics
+
+- нужен GPS/sensor outlier filtering
+- нужны richer derived metrics
+- нужны event-oriented сценарии анализа: hard braking, peak lean, acceleration events
+
+### Performance
+
+- chart pipeline всё ещё имеет запас для больших файлов
+- full redraw path ещё остаётся дорогим при части обновлений
+- map/export payload strategy ещё требует разделения preview vs full-fidelity
+
+### Architecture
+
+- `TelemetryWorkspaceCoordinator` остаётся главной complexity hotspot
+- `TelemetrySessionState` со временем может потребовать дополнительного разбиения
+- app-layer сценарии ещё не полностью разведены по небольшим ответственностям
+
+### UX
+
+- recovery/error states ещё можно сделать понятнее
+- статусные тексты должны быть более user-facing
+- advanced analysis workflows пока уступают базовому linked-selection сценарию
+
+## Фазы развития
+
+## Phase 1 — Data Reliability
+
+### Goal
+Сделать импорт устойчивым, диагностируемым и удобным для реальных логов.
+
+### Planned work
+
+- продолжить усиление streaming CSV path
+- добавить полноценный import report:
+  - сколько строк прочитано
+  - сколько пропущено
+  - почему они пропущены
+  - какие каналы отсутствуют
+- поддержать graceful degradation для partial logs
+- расширить user-visible diagnostics в UI
+- добавить golden-sample regression fixtures для грязных CSV и больших файлов
+
+### Success signal
+
+- import не превращается в «тишину» при проблемных данных
+- пользователь получает понятный результат: success / partial success / explicit failure
+- поведение импорта проверяется репликабельными тестами
+
+## Phase 2 — Correct Analytics
+
+### Goal
+Сделать агрегаты и summary-метрики надёжнее и полезнее.
+
+### Planned work
+
+- развить новую baseline-модель time-weighted метрик
+- добавить GPS outlier filtering / smoothing
+- добавить event detection:
+  - hard braking
+  - sharp acceleration
+  - peak lean
+  - stop/start patterns
+- разделить raw vs cleaned interpretation там, где это важно
+- расширить тесты на корректность метрик
+
+### Success signal
+
+- summary metrics объяснимы и воспроизводимы
+- искажения от шумных данных уменьшаются
+- аналитика становится полезнее для реального разбора поездки
+
+## Phase 3 — Performance & Architecture
+
+### Goal
+Удержать UI отзывчивым и не дать orchestration-союзу снова стать bottleneck.
+
+### Planned work
+
+- продолжить вынос сценариев из `TelemetryWorkspaceCoordinator`
+- сделать workspace facade тоньше
+- определить perf budgets для:
+  - import time
+  - chart redraw time
+  - map refresh latency
+  - session restore time
+- использовать profiling results для следующего глубокого chart/perf cut
+- уменьшить лишние копирования и полные пересборки данных
+- добавить perf regression coverage в CI
+
+### Success signal
+
+- большие логи остаются usable
+- app-layer refactors легче делать без страха сломать полэкрана
+- профилирование помогает выбирать следующую optimisation target, а не гадать
+
+## Phase 4 — Map & Export
+
+### Goal
+Сделать карту сильной рабочей частью продукта, а не просто визуализацией маршрута.
+
+### Planned work
+
+- разделить runtime preview path и full-fidelity export path
+- довести tile cache/proxy до более законченной capability
+- добавить дополнительные export formats:
+  - GPX
+  - KML
+  - GeoJSON
+- добавить route heatmaps:
+  - by speed
+  - by lean
+  - by acceleration
+- добавить bookmarks / incidents на карте
+- улучшить selected-point feedback и long-route responsiveness
+
+### Success signal
+
+- карта полезна и внутри приложения, и для внешнего шеринга
+- export качество не ограничивается runtime shortcut’ами
+- repeated scrubbing/panning меньше зависит от сети и tile churn
+
+## Phase 5 — Advanced Analysis Features
+
+### Goal
+Сделать приложение инструментом исследования, а не только просмотра.
+
+### Planned work
+
+- фильтрация не только по индексу, но и по:
+  - speed
+  - lean
+  - acceleration
+  - distance
+  - time interval
+- сравнение двух заездов
+- overlay нескольких трасс
+- segment / lap analysis
+- richer selected-range summaries
+- scenario presets:
+  - city
+  - highway
+  - mountain road
+  - track day
+
+### Success signal
+
+- пользователь может быстро изолировать интересный участок поездки
+- появляется реальная comparative-analysis value
+- базовый workflow становится сильнее, а не сложнее ради сложности
+
+## Phase 6 — Release Engineering & Product Polish
+
+### Goal
+Сделать проект проще для выпуска, повторяемой сборки и повседневного использования.
+
+### Planned work
+
+- явный CI/status story в репозитории
+- portable build / installer artifacts
+- релизы с changelog
+- crash-log bundle для bug reports
+- sample datasets для demo и regression
+- clearer empty/loading/error states
+- более чистые и user-facing status messages
+- consistency cleanup по UI и interaction flows
+
+### Success signal
+
+- проект проще запускать, проверять и распространять
+- пользователю легче понимать состояние приложения
+- качество релизного процесса догоняет качество кода
+
+## Версионированный backlog
+
+### v14 — Data Reliability
+
+- продолжить hardening streaming CSV reader path
+- расширить import report и malformed-row diagnostics
+- поддержать partial logs с graceful degradation
+- добавить golden-sample dirty CSV tests
+- улучшить recovery messaging в UI
+
+### v15 — Correct Analytics
+
+- развить time-weighted metrics baseline
+- добавить GPS/sensor outlier handling
+- добавить event detection
+- расширить metric correctness tests
+- отделить raw vs cleaned data interpretation там, где это полезно
+
+### v16 — Performance & Architecture
+
+- продолжить splitting orchestration into scenario services
+- сделать workspace facade тоньше
+- уменьшить rebuild/materialization cost
+- использовать profiling aggregates для следующего perf-cut
+- добавить perf regression automation
+
+### v17 — Map & Export
+
+- разделить preview/export fidelity
+- улучшить tile cache/proxy story
+- добавить GPX/KML/GeoJSON export
+- добавить heatmaps и bookmarks
+- улучшить export/share сценарии
+
+### v18 — Product Features
+
+- advanced filters
+- multi-ride comparison
+- route overlays
+- segment/lap workflows
+- presets and richer summaries
+
+### v19 — Release Engineering
+
+- release pipeline
+- packaging artifacts
+- changelog discipline
+- sample datasets
+- crash-report bundle
+- clearer repo-level release story
+
+## Immediate next steps
+
+На ближайшую итерацию я бы держал такой порядок:
+
+1. Доработать import diagnostics и recovery states вокруг CSV/restore flows.
+2. Закрыть следующий слой корректности аналитики: outlier filtering и derived metrics.
+3. По profiling output выбрать следующий глубокий performance cut в chart/data pipeline.
+4. Продолжить дробление `TelemetryWorkspaceCoordinator`, только там, где это реально уменьшает hidden coupling.
+5. После этого расширять advanced filters и multi-session features.
+
+## Критерии успеха
+
+Roadmap можно считать успешно реализуемым, если проект дойдёт до состояния, где:
+
+- реальные CSV открываются заметно надёжнее
+- ошибки и partial success объясняются пользователю
+- summary metrics вызывают больше доверия
+- большие логи не ломают UX
+- карта и графики остаются отзывчивыми на длинных поездках
+- архитектура не деградирует обратно в central-god-object design
+- README, ROADMAP и CHANGELOG остаются согласованными

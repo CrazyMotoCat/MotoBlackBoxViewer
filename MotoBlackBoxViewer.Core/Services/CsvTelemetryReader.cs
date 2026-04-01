@@ -7,68 +7,114 @@ namespace MotoBlackBoxViewer.Core.Services;
 
 public sealed class CsvTelemetryReader : ICsvTelemetryReader
 {
+    private const int MaxReportedRowIssues = 10;
     private static readonly Encoding StrictUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-    public async Task<IReadOnlyList<TelemetryPoint>> ReadAsync(string filePath, CancellationToken cancellationToken = default)
+    public async Task<CsvTelemetryReadResult> ReadAsync(string filePath, CancellationToken cancellationToken = default)
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-        string[] lines = await ReadAllLinesWithEncodingFallbackAsync(filePath, cancellationToken);
-        if (lines.Length < 2)
-            throw new InvalidOperationException("CSV file is empty or does not contain telemetry rows.");
-
-        string[] headers = ParseCsvLine(lines[0]).Select(Normalize).ToArray();
-
-        int latIndex = FindColumn(headers, "широта", "latitude", "lat");
-        int lonIndex = FindColumn(headers, "долгота", "longitude", "lon", "lng");
-        int speedIndex = FindColumn(headers, "скорость", "speed", "speedkmh");
-        int accelZIndex = FindColumn(headers, "ускорениепоz", "accelz", "az");
-        int accelXIndex = FindColumn(headers, "ускорениепоx", "ускорениеpox", "accelx", "ax");
-        int accelYIndex = FindColumn(headers, "ускорениепоу", "ускорениепоy", "ускорениеpoy", "accely", "ay");
-        int leanIndex = FindColumn(headers, "уголнаклона", "lean", "leanangle", "roll");
-
-        List<TelemetryPoint> result = new();
-
-        for (int i = 1; i < lines.Length; i++)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            if (string.IsNullOrWhiteSpace(lines[i]))
-                continue;
-
-            string[] parts = ParseCsvLine(lines[i]);
-            if (parts.Length < headers.Length)
-                continue;
-
-            TelemetryPoint point = new()
-            {
-                Index = result.Count + 1,
-                Latitude = ParseDouble(parts[latIndex]),
-                Longitude = ParseDouble(parts[lonIndex]),
-                SpeedKmh = ParseDouble(parts[speedIndex]),
-                AccelZ = ParseDouble(parts[accelZIndex]),
-                AccelX = ParseDouble(parts[accelXIndex]),
-                AccelY = ParseDouble(parts[accelYIndex]),
-                LeanAngleDeg = ParseDouble(parts[leanIndex])
-            };
-
-            result.Add(point);
-        }
-
-        FillDistances(result);
-        return result;
-    }
-
-    private static async Task<string[]> ReadAllLinesWithEncodingFallbackAsync(string filePath, CancellationToken cancellationToken)
-    {
         try
         {
-            return await File.ReadAllLinesAsync(filePath, StrictUtf8, cancellationToken);
+            return await ReadWithEncodingAsync(filePath, StrictUtf8, cancellationToken);
         }
         catch (DecoderFallbackException)
         {
-            return await File.ReadAllLinesAsync(filePath, Encoding.GetEncoding(1251), cancellationToken);
+            return await ReadWithEncodingAsync(filePath, Encoding.GetEncoding(1251), cancellationToken);
         }
+    }
+
+    private static async Task<CsvTelemetryReadResult> ReadWithEncodingAsync(
+        string filePath,
+        Encoding encoding,
+        CancellationToken cancellationToken)
+    {
+        await using FileStream stream = new(
+            filePath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 4096,
+            useAsync: true);
+        using StreamReader reader = new(stream, encoding, detectEncodingFromByteOrderMarks: true);
+
+        string? headerLine = await reader.ReadLineAsync().WaitAsync(cancellationToken);
+        if (headerLine is null)
+            throw new InvalidOperationException("CSV file is empty or does not contain telemetry rows.");
+
+        string[] headers = ParseCsvLine(headerLine).Select(Normalize).ToArray();
+        ColumnMap columnMap = CreateColumnMap(headers);
+
+        List<TelemetryPoint> result = new();
+        List<CsvTelemetryRowIssue> rowIssues = new();
+        int skippedRowCount = 0;
+        int lineNumber = 1;
+        bool sawAnyDataRow = false;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string? line = await reader.ReadLineAsync().WaitAsync(cancellationToken);
+            if (line is null)
+                break;
+
+            lineNumber++;
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            sawAnyDataRow = true;
+            string[] parts = ParseCsvLine(line);
+            if (parts.Length < headers.Length)
+            {
+                RegisterRowIssue(rowIssues, lineNumber, "Not enough columns.");
+                skippedRowCount++;
+                continue;
+            }
+
+            try
+            {
+                TelemetryPoint point = new()
+                {
+                    Index = result.Count + 1,
+                    Latitude = ParseDouble(parts[columnMap.Latitude]),
+                    Longitude = ParseDouble(parts[columnMap.Longitude]),
+                    SpeedKmh = ParseDouble(parts[columnMap.Speed]),
+                    AccelZ = ParseDouble(parts[columnMap.AccelZ]),
+                    AccelX = ParseDouble(parts[columnMap.AccelX]),
+                    AccelY = ParseDouble(parts[columnMap.AccelY]),
+                    LeanAngleDeg = ParseDouble(parts[columnMap.Lean])
+                };
+
+                result.Add(point);
+            }
+            catch (FormatException ex)
+            {
+                RegisterRowIssue(rowIssues, lineNumber, ex.Message);
+                skippedRowCount++;
+            }
+        }
+
+        if (!sawAnyDataRow)
+            throw new InvalidOperationException("CSV file is empty or does not contain telemetry rows.");
+
+        if (result.Count == 0 && skippedRowCount > 0)
+            throw new InvalidOperationException(BuildNoValidRowsMessage(skippedRowCount, rowIssues));
+
+        FillDistances(result);
+        return new CsvTelemetryReadResult(result, skippedRowCount, rowIssues);
+    }
+
+    private static ColumnMap CreateColumnMap(string[] headers)
+    {
+        return new ColumnMap(
+            FindColumn(headers, "широта", "РЁРёСЂРѕС‚Р°", "latitude", "lat"),
+            FindColumn(headers, "долгота", "Р”РѕР»РіРѕС‚Р°", "longitude", "lon", "lng"),
+            FindColumn(headers, "скорость", "РЎРєРѕСЂРѕСЃС‚СЊ", "speed", "speedkmh"),
+            FindColumn(headers, "ускорение по Z", "РЈСЃРєРѕСЂРµРЅРёРµ РїРѕ Z", "accelZ", "az"),
+            FindColumn(headers, "ускорение по X", "РЈСЃРєРѕСЂРµРЅРёРµ РїРѕ X", "accelX", "ax"),
+            FindColumn(headers, "ускорение по Y", "РЈСЃРєРѕСЂРµРЅРёРµ РїРѕ Y", "accelY", "ay"),
+            FindColumn(headers, "угол наклона", "РЈРіРѕР» РЅР°РєР»РѕРЅР°", "lean", "leanAngle", "roll"));
     }
 
     private static string[] ParseCsvLine(string line)
@@ -119,9 +165,13 @@ public sealed class CsvTelemetryReader : ICsvTelemetryReader
 
     private static int FindColumn(string[] headers, params string[] aliases)
     {
+        HashSet<string> normalizedAliases = aliases
+            .Select(Normalize)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         for (int i = 0; i < headers.Length; i++)
         {
-            if (aliases.Contains(headers[i], StringComparer.OrdinalIgnoreCase))
+            if (normalizedAliases.Contains(headers[i]))
                 return i;
         }
 
@@ -142,6 +192,23 @@ public sealed class CsvTelemetryReader : ICsvTelemetryReader
         }
 
         throw new FormatException($"Unable to parse numeric value: '{value}'");
+    }
+
+    private static void RegisterRowIssue(List<CsvTelemetryRowIssue> rowIssues, int lineNumber, string reason)
+    {
+        if (rowIssues.Count >= MaxReportedRowIssues)
+            return;
+
+        rowIssues.Add(new CsvTelemetryRowIssue(lineNumber, reason));
+    }
+
+    private static string BuildNoValidRowsMessage(int skippedRowCount, IReadOnlyList<CsvTelemetryRowIssue> rowIssues)
+    {
+        if (rowIssues.Count == 0)
+            return $"CSV file does not contain valid telemetry rows. Skipped {skippedRowCount} malformed row(s).";
+
+        CsvTelemetryRowIssue firstIssue = rowIssues[0];
+        return $"CSV file does not contain valid telemetry rows. Skipped {skippedRowCount} malformed row(s). First issue: line {firstIssue.LineNumber}: {firstIssue.Reason}";
     }
 
     private static void FillDistances(IReadOnlyList<TelemetryPoint> points)
@@ -180,4 +247,13 @@ public sealed class CsvTelemetryReader : ICsvTelemetryReader
     }
 
     private static double DegreesToRadians(double degrees) => degrees * Math.PI / 180d;
+
+    private readonly record struct ColumnMap(
+        int Latitude,
+        int Longitude,
+        int Speed,
+        int AccelZ,
+        int AccelX,
+        int AccelY,
+        int Lean);
 }

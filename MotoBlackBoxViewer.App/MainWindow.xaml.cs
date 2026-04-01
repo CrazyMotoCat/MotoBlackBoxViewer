@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using MotoBlackBoxViewer.App.Controls;
 using MotoBlackBoxViewer.App.ViewModels;
 
 namespace MotoBlackBoxViewer.App;
@@ -28,5 +29,11 @@ public partial class MainWindow : Window
     {
         if (DataContext is MainViewModel viewModel)
             viewModel.Workspace.Map.SetManualScrubbing(false);
+    }
+
+    private void MapViewControl_ErrorOccurred(object sender, MapControlErrorEventArgs e)
+    {
+        if (DataContext is MainViewModel viewModel)
+            viewModel.Workspace.Data.StatusText = e.Message;
     }
 }

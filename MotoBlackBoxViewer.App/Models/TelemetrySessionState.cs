@@ -10,6 +10,8 @@ public sealed class TelemetrySessionState
 
     public BulkObservableCollection<TelemetryPoint> VisiblePoints { get; } = new();
 
+    public string ImportDiagnosticsText { get; set; } = string.Empty;
+
     public string StatusText { get; set; } = "Готово. Откройте CSV-файл.";
 
     public TelemetryPoint? SelectedPoint { get; set; }
@@ -25,6 +27,8 @@ public sealed class TelemetrySessionState
     public int FilterEndIndex { get; set; }
 
     public int ChartWindowRadius { get; set; } = 1000;
+
+    public bool IsChartProfilingEnabled { get; set; }
 
     public int MapRefreshVersion { get; set; }
 

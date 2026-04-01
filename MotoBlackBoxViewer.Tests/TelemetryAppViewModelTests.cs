@@ -77,6 +77,28 @@ public sealed class TelemetryAppViewModelTests
     }
 
     [Fact]
+    public void CreateVisibleData_UsesTimeWeightedStatisticsForFilteredRange()
+    {
+        var processor = new TelemetryDataProcessor(new TelemetryAnalyzer());
+        List<TelemetryPoint> allPoints =
+        [
+            CreatePoint(1, 5, 0),
+            CreatePoint(2, 10, 100),
+            CreatePoint(3, 100, 110),
+            CreatePoint(4, 100, 1110)
+        ];
+
+        TelemetryVisibleData visibleData = processor.CreateVisibleData(allPoints, startIndex: 2, endIndex: 4);
+        double expectedAverageSpeed =
+            1.01d /
+            ((0.01d / 55d) + (1d / 100d));
+
+        Assert.Equal([2, 3, 4], visibleData.Points.Select(p => p.Index));
+        Assert.NotEqual((10d + 100d + 100d) / 3d, visibleData.Statistics.AverageSpeedKmh, 3);
+        Assert.Equal(expectedAverageSpeed, visibleData.Statistics.AverageSpeedKmh, 3);
+    }
+
+    [Fact]
     public void Selection_Dispose_UnsubscribesFromDataEvents()
     {
         var data = CreateLoadedDataViewModel();
@@ -190,7 +212,7 @@ public sealed class TelemetryAppViewModelTests
         return new WorkspaceTestContext(workspace, sessionPersistenceCoordinator);
     }
 
-    private static TelemetryPoint CreatePoint(int index, double speedKmh)
+    private static TelemetryPoint CreatePoint(int index, double speedKmh, double? distanceFromStartMeters = null)
     {
         return new TelemetryPoint
         {
@@ -202,7 +224,7 @@ public sealed class TelemetryAppViewModelTests
             AccelY = index * 0.2,
             AccelZ = index * 0.3,
             LeanAngleDeg = index * 1.5,
-            DistanceFromStartMeters = index * 100
+            DistanceFromStartMeters = distanceFromStartMeters ?? index * 100
         };
     }
 
@@ -215,8 +237,8 @@ public sealed class TelemetryAppViewModelTests
             _points = points;
         }
 
-        public Task<IReadOnlyList<TelemetryPoint>> ReadAsync(string filePath, CancellationToken cancellationToken = default)
-            => Task.FromResult(_points);
+        public Task<CsvTelemetryReadResult> ReadAsync(string filePath, CancellationToken cancellationToken = default)
+            => Task.FromResult(new CsvTelemetryReadResult(_points, 0, Array.Empty<CsvTelemetryRowIssue>()));
     }
 
     private sealed class StubMapExportService : IMapExportService
@@ -288,6 +310,12 @@ public sealed class TelemetryAppViewModelTests
 
     private sealed class RecordingSessionPersistenceCoordinator : ISessionPersistenceCoordinator
     {
+        public event Action<Exception>? SaveFailed
+        {
+            add { }
+            remove { }
+        }
+
         public List<SaveCall> SaveCalls { get; } = [];
 
         public AppSessionSettings Load() => new();

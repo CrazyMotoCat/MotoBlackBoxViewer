@@ -15,7 +15,7 @@ public sealed class ChartPerformanceSmokeTests
         CsvTelemetryReader reader = new();
         TelemetryDataProcessor processor = new(new TelemetryAnalyzer());
 
-        IReadOnlyList<TelemetryPoint> points = await reader.ReadAsync(filePath);
+        IReadOnlyList<TelemetryPoint> points = (await reader.ReadAsync(filePath)).Points;
         TelemetryVisibleData visibleData = processor.CreateVisibleData(points, 1, points.Count);
 
         Assert.True(points.Count >= 35000);
@@ -39,7 +39,7 @@ public sealed class ChartPerformanceSmokeTests
         CsvTelemetryReader reader = new();
         TelemetryDataProcessor processor = new(new TelemetryAnalyzer());
 
-        IReadOnlyList<TelemetryPoint> points = await reader.ReadAsync(filePath);
+        IReadOnlyList<TelemetryPoint> points = (await reader.ReadAsync(filePath)).Points;
         TelemetryVisibleData visibleData = processor.CreateVisibleData(points, 1, points.Count);
 
         const int maxPointCount = 900;

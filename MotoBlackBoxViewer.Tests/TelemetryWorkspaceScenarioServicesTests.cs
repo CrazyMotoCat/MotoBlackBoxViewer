@@ -76,6 +76,7 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
         TelemetryWorkspaceSessionRestoreService service = new(
             context.Data,
             context.Playback,
+            context.ChartProfiling,
             context.Synchronization);
         string filePath = CreateExistingTempFile();
         AppSessionSettings session = new()
@@ -84,6 +85,7 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
             FilterStartIndex = 2,
             FilterEndIndex = 3,
             SelectedChartWindowRadius = 200,
+            IsChartProfilingEnabled = true,
             SelectedPlaybackSpeedLabel = "2x",
             SelectedVisiblePosition = 99
         };
@@ -92,6 +94,7 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
 
         Assert.Equal("2x", context.Playback.SelectedPlaybackSpeed.Label);
         Assert.Equal(200, context.Data.ChartWindowRadius);
+        Assert.True(context.ChartProfiling.IsEnabled);
         Assert.Equal([2, 3], context.Data.Points.Select(point => point.Index));
         Assert.Equal(2, context.Selection.PlaybackPosition);
         Assert.Equal(3, context.Selection.SelectedPoint?.Index);
@@ -108,10 +111,12 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
         TelemetryWorkspaceSessionRestoreService service = new(
             context.Data,
             context.Playback,
+            context.ChartProfiling,
             context.Synchronization);
         AppSessionSettings session = new()
         {
             SelectedChartWindowRadius = 50,
+            IsChartProfilingEnabled = true,
             SelectedPlaybackSpeedLabel = "0.5x"
         };
 
@@ -119,6 +124,7 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
 
         Assert.Null(status);
         Assert.Equal(50, context.Data.ChartWindowRadius);
+        Assert.True(context.ChartProfiling.IsEnabled);
         Assert.Equal("0.5x", context.Playback.SelectedPlaybackSpeed.Label);
         Assert.False(context.Data.HasSourceData);
         Assert.Equal(0, context.Map.RefreshVersion);
@@ -145,9 +151,10 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
         TelemetrySelectionViewModel selection = new(data, state);
         TelemetryPlaybackViewModel playback = new(data, selection, new StubPlaybackCoordinator());
         TelemetryMapViewModel map = new(data, selection, new StubMapExportService(), state);
+        TelemetryChartProfilingViewModel chartProfiling = new(state);
         TelemetryWorkspaceSynchronizationService synchronization = new(data, selection, map, state);
 
-        return new ScenarioContext(data, selection, playback, map, synchronization);
+        return new ScenarioContext(data, selection, playback, map, chartProfiling, synchronization);
     }
 
     private static IReadOnlyList<TelemetryPoint> CreatePoints()
@@ -174,12 +181,14 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
             TelemetrySelectionViewModel selection,
             TelemetryPlaybackViewModel playback,
             TelemetryMapViewModel map,
+            TelemetryChartProfilingViewModel chartProfiling,
             TelemetryWorkspaceSynchronizationService synchronization)
         {
             Data = data;
             Selection = selection;
             Playback = playback;
             Map = map;
+            ChartProfiling = chartProfiling;
             Synchronization = synchronization;
         }
 
@@ -191,6 +200,8 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
 
         public TelemetryMapViewModel Map { get; }
 
+        public TelemetryChartProfilingViewModel ChartProfiling { get; }
+
         public TelemetryWorkspaceSynchronizationService Synchronization { get; }
 
         public void Dispose()
@@ -198,6 +209,7 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
             Map.Dispose();
             Selection.Dispose();
             Playback.Dispose();
+            ChartProfiling.Dispose();
         }
     }
 
@@ -210,8 +222,8 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
             _points = points;
         }
 
-        public Task<IReadOnlyList<TelemetryPoint>> ReadAsync(string filePath, CancellationToken cancellationToken = default)
-            => Task.FromResult(_points);
+        public Task<CsvTelemetryReadResult> ReadAsync(string filePath, CancellationToken cancellationToken = default)
+            => Task.FromResult(new CsvTelemetryReadResult(_points, 0, Array.Empty<CsvTelemetryRowIssue>()));
     }
 
     private sealed class StubMapExportService : IMapExportService
@@ -283,6 +295,12 @@ public sealed class TelemetryWorkspaceScenarioServicesTests
 
     private sealed class RecordingSessionPersistenceCoordinator : ISessionPersistenceCoordinator
     {
+        public event Action<Exception>? SaveFailed
+        {
+            add { }
+            remove { }
+        }
+
         public List<SaveCall> SaveCalls { get; } = [];
 
         public AppSessionSettings Load() => new();

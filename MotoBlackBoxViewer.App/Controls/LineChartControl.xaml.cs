@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using System.Runtime.CompilerServices;
+using System.Diagnostics;
 
 namespace MotoBlackBoxViewer.App.Controls;
 
@@ -127,7 +128,22 @@ public partial class LineChartControl : UserControl
             windowedValues,
             windowedSelectedIndex,
             maxRenderablePointCount);
+
+        Stopwatch? redrawStopwatch = ChartPerformanceDiagnostics.HasActiveListeners
+            ? Stopwatch.StartNew()
+            : null;
         ChartRenderHelper.DrawSingleSeries(ChartCanvas, renderValues, Unit, renderSelectedIndex, LineColorHex, SeriesLabel);
+        if (redrawStopwatch is not null)
+        {
+            redrawStopwatch.Stop();
+            ChartPerformanceDiagnostics.Report(
+                operation: "RedrawSingleSeries",
+                inputPointCount: renderValues.Count,
+                outputPointCount: renderValues.Count,
+                elapsed: redrawStopwatch.Elapsed,
+                detail: $"selected={(renderSelectedIndex.HasValue ? renderSelectedIndex.Value : 0)}; canvas={ChartCanvas.ActualWidth:F0}x{ChartCanvas.ActualHeight:F0}");
+        }
+
         _lastRenderState = nextState;
     }
 

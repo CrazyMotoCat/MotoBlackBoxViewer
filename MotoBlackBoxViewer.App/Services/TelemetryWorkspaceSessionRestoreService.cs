@@ -8,15 +8,18 @@ internal sealed class TelemetryWorkspaceSessionRestoreService
 {
     private readonly TelemetryDataViewModel _data;
     private readonly TelemetryPlaybackViewModel _playback;
+    private readonly TelemetryChartProfilingViewModel _chartProfiling;
     private readonly TelemetryWorkspaceSynchronizationService _synchronization;
 
     public TelemetryWorkspaceSessionRestoreService(
         TelemetryDataViewModel data,
         TelemetryPlaybackViewModel playback,
+        TelemetryChartProfilingViewModel chartProfiling,
         TelemetryWorkspaceSynchronizationService synchronization)
     {
         _data = data;
         _playback = playback;
+        _chartProfiling = chartProfiling;
         _synchronization = synchronization;
     }
 
@@ -24,6 +27,7 @@ internal sealed class TelemetryWorkspaceSessionRestoreService
     {
         _data.RestoreChartWindowRadius(session.SelectedChartWindowRadius);
         _playback.RestoreSpeed(session.SelectedPlaybackSpeedLabel);
+        _chartProfiling.RestoreEnabled(session.IsChartProfilingEnabled);
 
         if (string.IsNullOrWhiteSpace(session.LastFilePath))
             return null;

@@ -26,6 +26,26 @@ public sealed class TelemetryWorkspaceCoordinatorTests
     }
 
     [Fact]
+    public async Task LoadCsvAsync_WhenReaderReportsMalformedRows_SurfacesDiagnostics()
+    {
+        using TestContext context = CreateContext(
+            new AppSessionSettings(),
+            reader: new StubCsvTelemetryReader(
+                CreatePoints(),
+                skippedRowCount: 2,
+                rowIssues:
+                [
+                    new CsvTelemetryRowIssue(7, "Not enough columns.")
+                ]));
+
+        await context.Coordinator.LoadCsvAsync("ride.csv");
+
+        Assert.Contains("Пропущено 2 проблемных строк", context.Data.StatusText);
+        Assert.Contains("строка 7", context.Data.ImportDiagnosticsText);
+        Assert.True(context.Data.HasImportDiagnostics);
+    }
+
+    [Fact]
     public async Task InitializeAsync_RestoresSessionFilterSelectionAndSpeed()
     {
         string filePath = CreateExistingTempFile();
@@ -35,6 +55,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
             FilterStartIndex = 2,
             FilterEndIndex = 3,
             SelectedChartWindowRadius = 200,
+            IsChartProfilingEnabled = true,
             SelectedPlaybackSpeedLabel = "2x",
             SelectedVisiblePosition = 2
         };
@@ -45,6 +66,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
 
         Assert.Equal("2x", context.Playback.SelectedPlaybackSpeed.Label);
         Assert.Equal(200, context.Data.ChartWindowRadius);
+        Assert.True(context.ChartProfiling.IsEnabled);
         Assert.Equal(2, context.Data.FilterStartIndex);
         Assert.Equal(3, context.Data.FilterEndIndex);
         Assert.Equal([2, 3], context.Data.Points.Select(p => p.Index));
@@ -219,6 +241,46 @@ public sealed class TelemetryWorkspaceCoordinatorTests
     }
 
     [Fact]
+    public async Task HandleChartProfilingPropertyChanged_WhenProfilingChanges_PersistsWithoutSelectedPosition()
+    {
+        using TestContext context = CreateContext(new AppSessionSettings());
+        await context.Coordinator.LoadCsvAsync("ride.csv");
+        context.SessionPersistenceCoordinator.SaveCalls.Clear();
+        context.ChartProfiling.IsEnabled = true;
+
+        context.Coordinator.HandleChartProfilingPropertyChanged(nameof(TelemetryChartProfilingViewModel.IsEnabled));
+
+        SaveCall saveCall = Assert.Single(context.SessionPersistenceCoordinator.SaveCalls);
+        Assert.False(saveCall.IncludeSelectedPosition);
+        Assert.True(saveCall.IsChartProfilingEnabled);
+        Assert.True(context.State.IsChartProfilingEnabled);
+    }
+
+    [Fact]
+    public async Task OpenMapInBrowser_WhenExportFails_SetsUserVisibleStatus()
+    {
+        using TestContext context = CreateContext(
+            new AppSessionSettings(),
+            mapExportService: new ThrowingMapExportService(new InvalidOperationException("map export unavailable")));
+        await context.Coordinator.LoadCsvAsync("ride.csv");
+
+        context.Coordinator.OpenMapInBrowser();
+
+        Assert.Equal("Не удалось экспортировать или открыть карту: map export unavailable", context.Data.StatusText);
+    }
+
+    [Fact]
+    public async Task SessionPersistenceSaveFailed_UpdatesStatusText()
+    {
+        using TestContext context = CreateContext(new AppSessionSettings());
+        await context.Coordinator.LoadCsvAsync("ride.csv");
+
+        context.SessionPersistenceCoordinator.RaiseSaveFailed(new IOException("disk full"));
+
+        Assert.Equal("Не удалось сохранить настройки сессии: disk full", context.Data.StatusText);
+    }
+
+    [Fact]
     public async Task LoadCsvAsync_WhenReaderFails_SetsErrorStatusAndDoesNotPersist()
     {
         using TestContext context = CreateContext(
@@ -253,7 +315,55 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         File.Delete(filePath);
     }
 
-    private static TestContext CreateContext(AppSessionSettings session, ICsvTelemetryReader? reader = null)
+    [Fact]
+    public async Task LoadCsvAsync_WhenCleanLoadFollowsMalformedImport_ClearsDiagnostics()
+    {
+        SequencedCsvTelemetryReader reader = new(
+            new CsvTelemetryReadResult(
+                CreatePoints(),
+                2,
+                [new CsvTelemetryRowIssue(7, "Not enough columns.")]),
+            new CsvTelemetryReadResult(
+                CreatePoints(),
+                0,
+                Array.Empty<CsvTelemetryRowIssue>()));
+        using TestContext context = CreateContext(new AppSessionSettings(), reader: reader);
+
+        await context.Coordinator.LoadCsvAsync("first.csv");
+        await context.Coordinator.LoadCsvAsync("second.csv");
+
+        Assert.False(context.Data.HasImportDiagnostics);
+        Assert.Equal(string.Empty, context.Data.ImportDiagnosticsText);
+        Assert.Contains("second.csv", context.Data.StatusText);
+        Assert.DoesNotContain("Not enough columns", context.Data.StatusText);
+    }
+
+    [Fact]
+    public async Task LoadCsvAsync_WhenReloadFailsAfterSuccessfulLoad_KeepsPreviousState()
+    {
+        SequencedCsvTelemetryReader reader = new(
+            new CsvTelemetryReadResult(CreatePoints(), 0, Array.Empty<CsvTelemetryRowIssue>()),
+            new InvalidOperationException("broken csv"));
+        using TestContext context = CreateContext(new AppSessionSettings(), reader: reader);
+
+        await context.Coordinator.LoadCsvAsync("good.csv");
+        int persistedSaveCount = context.SessionPersistenceCoordinator.SaveCalls.Count;
+
+        InvalidOperationException ex = await Assert.ThrowsAsync<InvalidOperationException>(() => context.Coordinator.LoadCsvAsync("broken.csv"));
+
+        Assert.Equal("broken csv", ex.Message);
+        Assert.Contains("CSV", context.Data.StatusText);
+        Assert.Contains("broken csv", context.Data.StatusText);
+        Assert.True(context.Data.HasSourceData);
+        Assert.Equal([1, 2, 3], context.Data.Points.Select(p => p.Index));
+        Assert.Equal("good.csv", context.Data.CurrentFileName);
+        Assert.Equal(persistedSaveCount, context.SessionPersistenceCoordinator.SaveCalls.Count);
+    }
+
+    private static TestContext CreateContext(
+        AppSessionSettings session,
+        ICsvTelemetryReader? reader = null,
+        IMapExportService? mapExportService = null)
     {
         TelemetrySessionState state = new();
         ICsvTelemetryReader resolvedReader = reader ?? new StubCsvTelemetryReader(CreatePoints());
@@ -262,14 +372,16 @@ public sealed class TelemetryWorkspaceCoordinatorTests
         TelemetrySelectionViewModel selection = new(data, state);
         StubPlaybackCoordinator playbackCoordinator = new();
         TelemetryPlaybackViewModel playback = new(data, selection, playbackCoordinator);
-        StubMapExportService mapExportService = new();
-        TelemetryMapViewModel map = new(data, selection, mapExportService, state);
+        IMapExportService resolvedMapExportService = mapExportService ?? new StubMapExportService();
+        TelemetryMapViewModel map = new(data, selection, resolvedMapExportService, state);
+        TelemetryChartProfilingViewModel chartProfiling = new(state);
         RecordingSessionPersistenceCoordinator sessionPersistenceCoordinator = new(session);
         TelemetryWorkspaceCoordinator coordinator = new(
             data,
             selection,
             playback,
             map,
+            chartProfiling,
             state,
             sessionPersistenceCoordinator);
 
@@ -279,6 +391,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
             selection,
             playback,
             map,
+            chartProfiling,
             playbackCoordinator,
             sessionPersistenceCoordinator,
             state);
@@ -309,6 +422,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
             TelemetrySelectionViewModel selection,
             TelemetryPlaybackViewModel playback,
             TelemetryMapViewModel map,
+            TelemetryChartProfilingViewModel chartProfiling,
             StubPlaybackCoordinator playbackCoordinator,
             RecordingSessionPersistenceCoordinator sessionPersistenceCoordinator,
             TelemetrySessionState state)
@@ -318,6 +432,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
             Selection = selection;
             Playback = playback;
             Map = map;
+            ChartProfiling = chartProfiling;
             PlaybackCoordinator = playbackCoordinator;
             SessionPersistenceCoordinator = sessionPersistenceCoordinator;
             State = state;
@@ -333,6 +448,8 @@ public sealed class TelemetryWorkspaceCoordinatorTests
 
         public TelemetryMapViewModel Map { get; }
 
+        public TelemetryChartProfilingViewModel ChartProfiling { get; }
+
         public StubPlaybackCoordinator PlaybackCoordinator { get; }
 
         public RecordingSessionPersistenceCoordinator SessionPersistenceCoordinator { get; }
@@ -344,6 +461,7 @@ public sealed class TelemetryWorkspaceCoordinatorTests
             Map.Dispose();
             Selection.Dispose();
             Playback.Dispose();
+            ChartProfiling.Dispose();
         }
     }
 
@@ -351,13 +469,21 @@ public sealed class TelemetryWorkspaceCoordinatorTests
     {
         private readonly IReadOnlyList<TelemetryPoint> _points;
 
-        public StubCsvTelemetryReader(IReadOnlyList<TelemetryPoint> points)
+        private readonly int _skippedRowCount;
+        private readonly IReadOnlyList<CsvTelemetryRowIssue> _rowIssues;
+
+        public StubCsvTelemetryReader(
+            IReadOnlyList<TelemetryPoint> points,
+            int skippedRowCount = 0,
+            IReadOnlyList<CsvTelemetryRowIssue>? rowIssues = null)
         {
             _points = points;
+            _skippedRowCount = skippedRowCount;
+            _rowIssues = rowIssues ?? Array.Empty<CsvTelemetryRowIssue>();
         }
 
-        public Task<IReadOnlyList<TelemetryPoint>> ReadAsync(string filePath, CancellationToken cancellationToken = default)
-            => Task.FromResult(_points);
+        public Task<CsvTelemetryReadResult> ReadAsync(string filePath, CancellationToken cancellationToken = default)
+            => Task.FromResult(new CsvTelemetryReadResult(_points, _skippedRowCount, _rowIssues));
     }
 
     private sealed class ThrowingCsvTelemetryReader : ICsvTelemetryReader
@@ -369,8 +495,32 @@ public sealed class TelemetryWorkspaceCoordinatorTests
             _exception = exception;
         }
 
-        public Task<IReadOnlyList<TelemetryPoint>> ReadAsync(string filePath, CancellationToken cancellationToken = default)
-            => Task.FromException<IReadOnlyList<TelemetryPoint>>(_exception);
+        public Task<CsvTelemetryReadResult> ReadAsync(string filePath, CancellationToken cancellationToken = default)
+            => Task.FromException<CsvTelemetryReadResult>(_exception);
+    }
+
+    private sealed class SequencedCsvTelemetryReader : ICsvTelemetryReader
+    {
+        private readonly Queue<object> _results;
+
+        public SequencedCsvTelemetryReader(params object[] results)
+        {
+            _results = new Queue<object>(results);
+        }
+
+        public Task<CsvTelemetryReadResult> ReadAsync(string filePath, CancellationToken cancellationToken = default)
+        {
+            if (_results.Count == 0)
+                throw new InvalidOperationException("No more queued CSV results.");
+
+            object next = _results.Dequeue();
+            return next switch
+            {
+                CsvTelemetryReadResult readResult => Task.FromResult(readResult),
+                Exception exception => Task.FromException<CsvTelemetryReadResult>(exception),
+                _ => throw new InvalidOperationException($"Unsupported queued CSV result type: {next.GetType().Name}")
+            };
+        }
     }
 
     private sealed class StubMapExportService : IMapExportService
@@ -449,30 +599,60 @@ public sealed class TelemetryWorkspaceCoordinatorTests
 
         public List<SaveCall> SaveCalls { get; } = [];
 
+        public event Action<Exception>? SaveFailed;
+
         public AppSessionSettings Load() => new()
         {
             LastFilePath = _loadSettings.LastFilePath,
             FilterStartIndex = _loadSettings.FilterStartIndex,
             FilterEndIndex = _loadSettings.FilterEndIndex,
             SelectedChartWindowRadius = _loadSettings.SelectedChartWindowRadius,
+            IsChartProfilingEnabled = _loadSettings.IsChartProfilingEnabled,
             SelectedPlaybackSpeedLabel = _loadSettings.SelectedPlaybackSpeedLabel,
             SelectedVisiblePosition = _loadSettings.SelectedVisiblePosition
         };
 
         public void Save(TelemetrySessionState state, string selectedPlaybackSpeedLabel, bool includeSelectedPosition)
         {
-            SaveCalls.Add(new SaveCall(state.CurrentFilePath, selectedPlaybackSpeedLabel, includeSelectedPosition, state.PlaybackPosition));
+            SaveCalls.Add(new SaveCall(
+                state.CurrentFilePath,
+                selectedPlaybackSpeedLabel,
+                includeSelectedPosition,
+                state.PlaybackPosition,
+                state.IsChartProfilingEnabled));
         }
 
         public void Flush(TelemetrySessionState state, string selectedPlaybackSpeedLabel, bool includeSelectedPosition)
         {
             Save(state, selectedPlaybackSpeedLabel, includeSelectedPosition);
         }
+
+        public void RaiseSaveFailed(Exception exception) => SaveFailed?.Invoke(exception);
+    }
+
+    private sealed class ThrowingMapExportService : IMapExportService
+    {
+        private readonly Exception _exception;
+
+        public ThrowingMapExportService(Exception exception)
+        {
+            _exception = exception;
+        }
+
+        public string GetTemplatePath() => throw _exception;
+
+        public string BuildRouteJson(IReadOnlyList<TelemetryPoint> points)
+            => $"[{string.Join(",", points.Select(p => p.Index))}]";
+
+        public string ExportHtml(IReadOnlyList<TelemetryPoint> points, string outputDirectory) => throw _exception;
+
+        public void OpenInBrowser(string htmlPath) => throw _exception;
     }
 
     private sealed record SaveCall(
         string? CurrentFilePath,
         string SelectedPlaybackSpeedLabel,
         bool IncludeSelectedPosition,
-        int PlaybackPosition);
+        int PlaybackPosition,
+        bool IsChartProfilingEnabled);
 }

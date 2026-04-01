@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using System.Runtime.CompilerServices;
+using System.Diagnostics;
 
 using MotoBlackBoxViewer.App.Models;
 
@@ -103,7 +104,23 @@ public partial class MultiLineChartControl : UserControl
             windowedSeries,
             windowedSelectedIndex,
             maxRenderablePointCount);
+
+        Stopwatch? redrawStopwatch = ChartPerformanceDiagnostics.HasActiveListeners
+            ? Stopwatch.StartNew()
+            : null;
         ChartRenderHelper.DrawMultiSeries(ChartCanvas, renderSeries, Unit, renderSelectedIndex);
+        if (redrawStopwatch is not null)
+        {
+            redrawStopwatch.Stop();
+            int renderPointCount = renderSeries.Count == 0 ? 0 : renderSeries.Max(seriesItem => seriesItem.Values.Count);
+            ChartPerformanceDiagnostics.Report(
+                operation: "RedrawMultiSeries",
+                inputPointCount: renderPointCount,
+                outputPointCount: renderPointCount,
+                elapsed: redrawStopwatch.Elapsed,
+                detail: $"seriesCount={renderSeries.Count}; selected={(renderSelectedIndex.HasValue ? renderSelectedIndex.Value : 0)}; canvas={ChartCanvas.ActualWidth:F0}x{ChartCanvas.ActualHeight:F0}");
+        }
+
         _lastRenderState = nextState;
     }
 

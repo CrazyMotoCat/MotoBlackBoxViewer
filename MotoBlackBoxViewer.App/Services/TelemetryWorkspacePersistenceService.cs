@@ -45,6 +45,7 @@ internal sealed class TelemetryWorkspacePersistenceService
             state.FilterStartIndex,
             state.FilterEndIndex,
             state.ChartWindowRadius,
+            state.IsChartProfilingEnabled,
             selectedPlaybackSpeedLabel,
             includeSelectedPosition,
             includeSelectedPosition ? state.PlaybackPosition : 0);
@@ -55,6 +56,7 @@ internal sealed class TelemetryWorkspacePersistenceService
         int FilterStartIndex,
         int FilterEndIndex,
         int ChartWindowRadius,
+        bool IsChartProfilingEnabled,
         string SelectedPlaybackSpeedLabel,
         bool IncludeSelectedPosition,
         int PlaybackPosition);

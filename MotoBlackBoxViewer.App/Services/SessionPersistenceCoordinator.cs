@@ -25,6 +25,8 @@ public sealed class SessionPersistenceCoordinator : ISessionPersistenceCoordinat
         _errorHandler = errorHandler;
     }
 
+    public event Action<Exception>? SaveFailed;
+
     public AppSessionSettings Load() => _settingsService.Load();
 
     public void Save(TelemetrySessionState state, string selectedPlaybackSpeedLabel, bool includeSelectedPosition)
@@ -58,6 +60,7 @@ public sealed class SessionPersistenceCoordinator : ISessionPersistenceCoordinat
             FilterStartIndex = state.FilterStartIndex,
             FilterEndIndex = state.FilterEndIndex,
             SelectedChartWindowRadius = state.ChartWindowRadius,
+            IsChartProfilingEnabled = state.IsChartProfilingEnabled,
             SelectedPlaybackSpeedLabel = selectedPlaybackSpeedLabel,
             SelectedVisiblePosition = includeSelectedPosition ? state.PlaybackPosition : 0
         };
@@ -132,5 +135,6 @@ public sealed class SessionPersistenceCoordinator : ISessionPersistenceCoordinat
     {
         Trace.TraceError($"Failed to save session settings: {exception}");
         _errorHandler?.Invoke(exception);
+        SaveFailed?.Invoke(exception);
     }
 }

@@ -6,6 +6,7 @@ namespace MotoBlackBoxViewer.App.Services;
 
 internal sealed class TelemetryWorkspaceCoordinator
 {
+    private readonly ISessionPersistenceCoordinator _sessionPersistenceCoordinator;
     private readonly TelemetryDataViewModel _data;
     private readonly TelemetryPlaybackViewModel _playback;
     private readonly TelemetrySessionState _state;
@@ -20,9 +21,11 @@ internal sealed class TelemetryWorkspaceCoordinator
         TelemetrySelectionViewModel selection,
         TelemetryPlaybackViewModel playback,
         TelemetryMapViewModel map,
+        TelemetryChartProfilingViewModel chartProfiling,
         TelemetrySessionState state,
         ISessionPersistenceCoordinator sessionPersistenceCoordinator)
     {
+        _sessionPersistenceCoordinator = sessionPersistenceCoordinator;
         _data = data;
         _playback = playback;
         _state = state;
@@ -30,16 +33,18 @@ internal sealed class TelemetryWorkspaceCoordinator
         TelemetryWorkspaceSynchronizationService synchronization = new(data, selection, map, state);
         _persistence = new TelemetryWorkspacePersistenceService(sessionPersistenceCoordinator);
         _load = new TelemetryWorkspaceLoadService(data, synchronization);
-        _sessionRestore = new TelemetryWorkspaceSessionRestoreService(data, playback, synchronization);
+        _sessionRestore = new TelemetryWorkspaceSessionRestoreService(data, playback, chartProfiling, synchronization);
         _interaction = new TelemetryWorkspaceInteractionService(
             data,
             playback,
             map,
+            chartProfiling,
             state,
             synchronization,
             _persistence,
             EnterSuppression,
             () => IsReactiveHandlingSuppressed);
+        _sessionPersistenceCoordinator.SaveFailed += HandleSessionSaveFailed;
     }
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -100,6 +105,8 @@ internal sealed class TelemetryWorkspaceCoordinator
 
     public void OpenMapInBrowser() => _interaction.OpenMapInBrowser();
 
+    public void ToggleChartProfiling() => _interaction.ToggleChartProfiling();
+
     public void TogglePlayback() => _interaction.TogglePlayback();
 
     public void StopPlayback(bool updateStatus = true) => _interaction.StopPlayback(updateStatus);
@@ -110,6 +117,8 @@ internal sealed class TelemetryWorkspaceCoordinator
 
     public void HandlePlaybackPropertyChanged(string? propertyName) => _interaction.HandlePlaybackPropertyChanged(propertyName);
 
+    public void HandleChartProfilingPropertyChanged(string? propertyName) => _interaction.HandleChartProfilingPropertyChanged(propertyName);
+
     private void PersistSession(bool includeSelectedPosition)
         => _persistence.Save(_state, _playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
 
@@ -117,6 +126,9 @@ internal sealed class TelemetryWorkspaceCoordinator
         => _persistence.Flush(_state, _playback.SelectedPlaybackSpeed.Label, includeSelectedPosition);
 
     private bool IsReactiveHandlingSuppressed => _suppressionDepth > 0;
+
+    private void HandleSessionSaveFailed(Exception exception)
+        => _data.StatusText = $"\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c \u043d\u0430\u0441\u0442\u0440\u043e\u0439\u043a\u0438 \u0441\u0435\u0441\u0441\u0438\u0438: {exception.Message}";
 
     private IDisposable EnterSuppression()
     {

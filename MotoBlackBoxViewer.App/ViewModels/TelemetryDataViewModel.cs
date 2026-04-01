@@ -81,6 +81,10 @@ public sealed class TelemetryDataViewModel : ObservableObject
 
     public string CurrentFileName => _state.CurrentFileName;
 
+    public string ImportDiagnosticsText => _state.ImportDiagnosticsText;
+
+    public bool HasImportDiagnostics => !string.IsNullOrWhiteSpace(_state.ImportDiagnosticsText);
+
     public bool HasPoints => _state.HasVisiblePoints;
 
     public bool HasSourceData => _state.HasSourceData;
@@ -131,13 +135,15 @@ public sealed class TelemetryDataViewModel : ObservableObject
 
     public async Task LoadCsvAsync(string filePath, CancellationToken cancellationToken = default)
     {
-        IReadOnlyList<TelemetryPoint> points = await _reader.ReadAsync(filePath, cancellationToken);
+        CsvTelemetryReadResult readResult = await _reader.ReadAsync(filePath, cancellationToken);
+        IReadOnlyList<TelemetryPoint> points = readResult.Points;
 
         _state.AllPoints.Clear();
         _state.AllPoints.AddRange(points);
         _state.CurrentFilePath = filePath;
         _state.FilterStartIndex = _state.AllPoints.Count == 0 ? 0 : 1;
         _state.FilterEndIndex = _state.AllPoints.Count;
+        SetImportDiagnosticsText(BuildImportDiagnosticsText(readResult));
 
         RaiseSourceDataProperties();
         RebuildVisibleData(preferredPoint: null, updateStatus: false);
@@ -151,6 +157,7 @@ public sealed class TelemetryDataViewModel : ObservableObject
         _state.CurrentFilePath = null;
         _state.FilterStartIndex = 0;
         _state.FilterEndIndex = 0;
+        SetImportDiagnosticsText(string.Empty);
         RaiseSourceDataProperties();
         RaiseVisibleDataProperties();
     }
@@ -333,11 +340,34 @@ public sealed class TelemetryDataViewModel : ObservableObject
     {
         RaisePropertyChanged(nameof(CurrentFileName));
         RaisePropertyChanged(nameof(HasSourceData));
+        RaisePropertyChanged(nameof(ImportDiagnosticsText));
+        RaisePropertyChanged(nameof(HasImportDiagnostics));
         RaisePropertyChanged(nameof(FilterMinimum));
         RaisePropertyChanged(nameof(FilterMaximum));
         RaisePropertyChanged(nameof(FilterStartIndex));
         RaisePropertyChanged(nameof(FilterEndIndex));
         RaisePropertyChanged(nameof(FilterSummary));
+    }
+
+    private void SetImportDiagnosticsText(string value)
+    {
+        if (string.Equals(_state.ImportDiagnosticsText, value, StringComparison.Ordinal))
+            return;
+
+        _state.ImportDiagnosticsText = value;
+    }
+
+    private static string BuildImportDiagnosticsText(CsvTelemetryReadResult readResult)
+    {
+        if (readResult.SkippedRowCount <= 0)
+            return string.Empty;
+
+        string summary = $"Пропущено {readResult.SkippedRowCount} проблемных строк при импорте.";
+        if (readResult.RowIssues.Count == 0)
+            return summary;
+
+        CsvTelemetryRowIssue firstIssue = readResult.RowIssues[0];
+        return $"{summary} Первая проблема: строка {firstIssue.LineNumber} ({firstIssue.Reason})";
     }
 
     private void RaiseVisibleDataProperties()

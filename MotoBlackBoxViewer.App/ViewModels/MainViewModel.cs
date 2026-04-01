@@ -23,6 +23,7 @@ public sealed class MainViewModel : IDisposable
         PrevPointCommand = new RelayCommand(() => MoveSelection(-1), () => Workspace.HasPoints);
         NextPointCommand = new RelayCommand(() => MoveSelection(1), () => Workspace.HasPoints);
         TogglePlaybackCommand = new RelayCommand(Workspace.TogglePlayback, () => Workspace.HasPoints);
+        ToggleChartProfilingCommand = new RelayCommand(Workspace.ToggleChartProfiling);
 
         Workspace.PropertyChanged += Workspace_PropertyChanged;
     }
@@ -44,6 +45,8 @@ public sealed class MainViewModel : IDisposable
     public ICommand NextPointCommand { get; }
 
     public ICommand TogglePlaybackCommand { get; }
+
+    public ICommand ToggleChartProfilingCommand { get; }
 
     public Task InitializeAsync(CancellationToken cancellationToken = default)
         => Workspace.InitializeAsync(cancellationToken);

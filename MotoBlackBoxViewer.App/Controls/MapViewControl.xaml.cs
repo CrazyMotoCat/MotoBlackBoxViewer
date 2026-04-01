@@ -10,6 +10,7 @@ namespace MotoBlackBoxViewer.App.Controls;
 public partial class MapViewControl : UserControl
 {
     private const string MapHostName = "appassets.motoblackboxviewer";
+    private static readonly TimeSpan UserVisibleErrorThrottle = TimeSpan.FromSeconds(10);
     private static readonly Uri MapPageUri = new($"https://{MapHostName}/index.html");
     private readonly OpenStreetMapTileCacheService _tileCache = new();
 
@@ -23,6 +24,8 @@ public partial class MapViewControl : UserControl
     private bool _routeSyncPending;
     private bool _selectionSyncPending;
     private bool _isSyncLoopRunning;
+    private string _lastUserVisibleErrorMessage = string.Empty;
+    private DateTime _lastUserVisibleErrorAtUtc = DateTime.MinValue;
 
     public static readonly DependencyProperty RouteJsonProperty = DependencyProperty.Register(
         nameof(RouteJson),
@@ -71,6 +74,8 @@ public partial class MapViewControl : UserControl
         InitializeComponent();
         Loaded += MapViewControl_Loaded;
     }
+
+    public event EventHandler<MapControlErrorEventArgs>? ErrorOccurred;
 
     public string RouteJson
     {
@@ -162,6 +167,7 @@ public partial class MapViewControl : UserControl
         catch (Exception ex)
         {
             Trace.TraceError($"Failed to initialize map control: {ex}");
+            RaiseUserVisibleError("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0438\u043d\u0438\u0446\u0438\u0430\u043b\u0438\u0437\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0432\u0441\u0442\u0440\u043e\u0435\u043d\u043d\u0443\u044e \u043a\u0430\u0440\u0442\u0443. \u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 WebView2 \u0438 \u0444\u0430\u0439\u043b\u044b map assets.");
         }
     }
 
@@ -183,6 +189,12 @@ public partial class MapViewControl : UserControl
     private async void MapWebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
     {
         _isMapReady = e.IsSuccess;
+        if (!_isMapReady)
+        {
+            RaiseUserVisibleError("\u0412\u0441\u0442\u0440\u043e\u0435\u043d\u043d\u0430\u044f \u043a\u0430\u0440\u0442\u0430 \u043d\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u043b\u0430\u0441\u044c. \u041c\u043e\u0436\u043d\u043e \u043f\u0440\u043e\u0434\u043e\u043b\u0436\u0438\u0442\u044c \u0431\u0435\u0437 \u043d\u0435\u0435 \u0438\u043b\u0438 \u043e\u0442\u043a\u0440\u044b\u0442\u044c export \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440\u0435.");
+            return;
+        }
+
         if (_isMapReady)
         {
             _appliedRouteJson = string.Empty;
@@ -210,7 +222,7 @@ public partial class MapViewControl : UserControl
         _ = RunAndTraceAsync(ProcessPendingSyncLoopAsync);
     }
 
-    private static async Task RunAndTraceAsync(Func<Task> action)
+    private async Task RunAndTraceAsync(Func<Task> action)
     {
         try
         {
@@ -219,6 +231,7 @@ public partial class MapViewControl : UserControl
         catch (Exception ex)
         {
             Trace.TraceError($"MapViewControl async operation failed: {ex}");
+            RaiseUserVisibleError("\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u043e\u0431\u043d\u043e\u0432\u0438\u0442\u044c \u0432\u0441\u0442\u0440\u043e\u0435\u043d\u043d\u0443\u044e \u043a\u0430\u0440\u0442\u0443. \u041f\u043e\u043f\u0440\u043e\u0431\u0443\u0439\u0442\u0435 refresh \u0438\u043b\u0438 export \u0432 \u0431\u0440\u0430\u0443\u0437\u0435\u0440.");
         }
     }
 
@@ -327,10 +340,38 @@ public partial class MapViewControl : UserControl
         catch (Exception ex)
         {
             Trace.TraceError($"Map tile interception failed for '{e.Request.Uri}': {ex}");
+            RaiseUserVisibleError("\u0427\u0430\u0441\u0442\u044c \u0442\u0430\u0439\u043b\u043e\u0432 \u043a\u0430\u0440\u0442\u044b \u043d\u0435 \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u043b\u0430\u0441\u044c. \u041f\u0440\u043e\u0432\u0435\u0440\u044c\u0442\u0435 \u0441\u0435\u0442\u044c; \u043a\u044d\u0448 \u0438 \u043c\u0430\u0440\u0448\u0440\u0443\u0442 \u043f\u0440\u0438 \u044d\u0442\u043e\u043c \u043f\u0440\u043e\u0434\u043e\u043b\u0436\u0430\u0442 \u0440\u0430\u0431\u043e\u0442\u0443.");
         }
         finally
         {
             deferral.Complete();
         }
     }
+
+    private void RaiseUserVisibleError(string message)
+    {
+        DateTime utcNow = DateTime.UtcNow;
+        if (string.Equals(_lastUserVisibleErrorMessage, message, StringComparison.Ordinal)
+            && utcNow - _lastUserVisibleErrorAtUtc < UserVisibleErrorThrottle)
+        {
+            return;
+        }
+
+        _lastUserVisibleErrorMessage = message;
+        _lastUserVisibleErrorAtUtc = utcNow;
+        _ = Dispatcher.BeginInvoke(new Action(() =>
+        {
+            ErrorOccurred?.Invoke(this, new MapControlErrorEventArgs(message));
+        }));
+    }
+}
+
+public sealed class MapControlErrorEventArgs : EventArgs
+{
+    public MapControlErrorEventArgs(string message)
+    {
+        Message = message;
+    }
+
+    public string Message { get; }
 }

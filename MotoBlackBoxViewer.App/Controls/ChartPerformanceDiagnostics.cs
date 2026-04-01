@@ -7,6 +7,17 @@ internal static class ChartPerformanceDiagnostics
     private static readonly object SyncRoot = new();
     private static Action<ChartPerformanceEvent>? _listener;
 
+    internal static bool HasActiveListeners
+    {
+        get
+        {
+            lock (SyncRoot)
+            {
+                return _listener is not null;
+            }
+        }
+    }
+
     public static IDisposable PushListener(Action<ChartPerformanceEvent> listener)
     {
         lock (SyncRoot)
@@ -26,7 +37,15 @@ internal static class ChartPerformanceDiagnostics
         int largePointThreshold = 5000,
         double slowMillisecondsThreshold = 8d)
     {
-        if (inputPointCount < largePointThreshold && elapsed.TotalMilliseconds < slowMillisecondsThreshold)
+        Action<ChartPerformanceEvent>? listener;
+        lock (SyncRoot)
+        {
+            listener = _listener;
+        }
+
+        bool shouldTrace = inputPointCount >= largePointThreshold
+            || elapsed.TotalMilliseconds >= slowMillisecondsThreshold;
+        if (!shouldTrace && listener is null)
             return;
 
         ChartPerformanceEvent evt = new(
@@ -36,13 +55,10 @@ internal static class ChartPerformanceDiagnostics
             elapsed,
             detail ?? string.Empty);
 
-        Trace.TraceInformation(
-            $"[ChartPerf] {evt.Operation} input={evt.InputPointCount} output={evt.OutputPointCount} elapsedMs={evt.Elapsed.TotalMilliseconds:F2} detail={evt.Detail}");
-
-        Action<ChartPerformanceEvent>? listener;
-        lock (SyncRoot)
+        if (shouldTrace)
         {
-            listener = _listener;
+            Trace.TraceInformation(
+                $"[ChartPerf] {evt.Operation} input={evt.InputPointCount} output={evt.OutputPointCount} elapsedMs={evt.Elapsed.TotalMilliseconds:F2} detail={evt.Detail}");
         }
 
         listener?.Invoke(evt);

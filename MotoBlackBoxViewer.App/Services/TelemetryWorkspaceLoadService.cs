@@ -20,6 +20,10 @@ internal sealed class TelemetryWorkspaceLoadService
     {
         await _data.LoadCsvAsync(filePath, cancellationToken);
         _synchronization.SynchronizeAfterLoad(updateStatus: false);
-        return $"Файл {Path.GetFileName(filePath)} открыт: {_data.FilterMaximum} точек, в текущем диапазоне {_data.Points.Count}.";
+
+        string baseStatus = $"Файл {Path.GetFileName(filePath)} открыт: {_data.FilterMaximum} точек, в текущем диапазоне {_data.Points.Count}.";
+        return string.IsNullOrWhiteSpace(_data.ImportDiagnosticsText)
+            ? baseStatus
+            : $"{baseStatus} {_data.ImportDiagnosticsText}";
     }
 }
